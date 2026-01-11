@@ -5,48 +5,48 @@ use color_eyre::config::HookBuilder;
 mod handlers;
 mod wizard;
 
-/// r2pilot - CLI pour gérer Cloudflare R2
+/// r2pilot - CLI to manage Cloudflare R2
 #[derive(Parser, Debug)]
 #[command(name = "r2pilot")]
 #[command(author = "Kev <kev@m7academy.com>")]
 #[command(version = "0.1.0")]
-#[command(about = "CLI Rust pour gérer Cloudflare R2 depuis votre terminal", long_about = None)]
+#[command(about = "Rust CLI to manage Cloudflare R2 from your terminal", long_about = None)]
 struct Cli {
-    /// Sous-commande à exécuter
+    /// Subcommand to execute
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(clap::Subcommand, Debug)]
 enum Commands {
-    /// Configuration initiale (wizard interactif)
+    /// Initial configuration (interactive wizard)
     Init,
 
-    /// Gestion de la configuration
+    /// Configuration management
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
 
-    /// Gestion des API tokens Cloudflare
+    /// Cloudflare API tokens management
     Tokens {
         #[command(subcommand)]
         action: TokenAction,
     },
 
-    /// Gestion des buckets R2
+    /// R2 buckets management
     Buckets {
         #[command(subcommand)]
         action: BucketAction,
     },
 
-    /// Gestion des fichiers
+    /// File management
     Files {
         #[command(subcommand)]
         action: FileAction,
     },
 
-    /// Génération d'URLs signées
+    /// Signed URLs generation
     Urls {
         #[command(subcommand)]
         action: UrlAction,
@@ -58,7 +58,7 @@ enum Commands {
         shell: String,
     },
 
-    /// Diagnostic et vérification
+    /// Diagnostics and verification
     Doctor {
         #[command(subcommand)]
         action: DoctorAction,
@@ -67,76 +67,76 @@ enum Commands {
 
 #[derive(clap::Subcommand, Debug)]
 enum ConfigAction {
-    /// Afficher la configuration actuelle
+    /// Show current configuration
     Show,
-    /// Éditer la configuration dans $EDITOR
+    /// Edit configuration in $EDITOR
     Edit,
-    /// Valider les credentials
+    /// Validate credentials
     Validate,
 }
 
 #[derive(clap::Subcommand, Debug)]
 enum TokenAction {
-    /// Lister les API tokens
+    /// List API tokens
     List,
-    /// Créer un nouveau token
+    /// Create a new token
     Create,
-    /// Révoquer un token
+    /// Revoke a token
     Revoke { token_id: String },
 }
 
 #[derive(clap::Subcommand, Debug)]
 enum BucketAction {
-    /// Lister les buckets
+    /// List buckets
     List,
-    /// Créer un bucket
+    /// Create a bucket
     Create { name: String },
-    /// Supprimer un bucket
+    /// Delete a bucket
     Delete { name: String },
-    /// Informations sur un bucket
+    /// Bucket information
     Info { name: String },
-    /// Lister le contenu d'un bucket
+    /// List bucket contents
     Ls { name: Option<String> },
 }
 
 #[derive(clap::Subcommand, Debug)]
 enum FileAction {
-    /// Uploader un fichier
+    /// Upload a file
     Upload {
-        /// Fichier local à uploader
+        /// Local file to upload
         file: String,
-        /// Clé R2 (destination)
+        /// R2 key (destination)
         key: String,
-        /// Bucket cible ( utilise le bucket par défaut)
+        /// Target bucket (uses default bucket)
         #[arg(short, long)]
         bucket: Option<String>,
-        /// Afficher la barre de progression
+        /// Show progress bar
         #[arg(short, long)]
         progress: bool,
     },
-    /// Télécharger un fichier
+    /// Download a file
     Download {
-        /// Clé R2
+        /// R2 key
         key: String,
-        /// Destination locale
+        /// Local destination
         dest: String,
-        /// Bucket source ( utilise le bucket par défaut)
+        /// Source bucket (uses default bucket)
         #[arg(short, long)]
         bucket: Option<String>,
     },
-    /// Supprimer un fichier
+    /// Delete a file
     Delete {
-        /// Clé R2
+        /// R2 key
         key: String,
-        /// Bucket cible ( utilise le bucket par défaut)
+        /// Target bucket (uses default bucket)
         #[arg(short, long)]
         bucket: Option<String>,
     },
-    /// Lister les fichiers
+    /// List files
     Ls {
-        /// Préfixe pour filtrer les résultats
+        /// Prefix to filter results
         prefix: Option<String>,
-        /// Bucket cible ( utilise le bucket par défaut)
+        /// Target bucket (uses default bucket)
         #[arg(short, long)]
         bucket: Option<String>,
     },
@@ -144,14 +144,14 @@ enum FileAction {
 
 #[derive(clap::Subcommand, Debug)]
 enum UrlAction {
-    /// Générer une URL signée
+    /// Generate a signed URL
     Generate {
-        /// Clé R2
+        /// R2 key
         key: String,
-        /// Expiration en secondes (défaut: 7200)
+        /// Expiration in seconds (default: 7200)
         #[arg(short, long, default_value = "7200")]
         expires: u64,
-        /// Format de sortie (table, json)
+        /// Output format (table, json)
         #[arg(short, long, default_value = "table")]
         output: String,
     },
@@ -159,9 +159,9 @@ enum UrlAction {
 
 #[derive(clap::Subcommand, Debug)]
 enum DoctorAction {
-    /// Vérifier l'installation
+    /// Check installation
     Check,
-    /// Tester la connexion R2
+    /// Test R2 connection
     TestConnection,
 }
 
