@@ -14,6 +14,12 @@ cargo build --release
 
 # Créer un lien symbolique
 ln -s $(pwd)/target/release/r2pilot ~/bin/r2pilot
+
+# IMPORTANT : Recharger votre session pour que le PATH soit pris en compte
+# Option 1 : Recharger votre shell
+source ~/.zshrc
+# Option 2 : Fermer et rouvrir votre terminal
+# Option 3 : Utiliser le chemin complet : ~/bin/r2pilot
 ```
 
 ## Utilisation

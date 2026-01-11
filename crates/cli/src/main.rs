@@ -4,6 +4,8 @@ use clap_complete::Shell as ClapShell;
 use color_eyre::config::HookBuilder;
 use std::str::FromStr;
 
+mod wizard;
+
 /// r2pilot - CLI pour gérer Cloudflare R2
 #[derive(Parser, Debug)]
 #[command(name = "r2pilot")]
@@ -177,13 +179,7 @@ async fn main() -> Result<()> {
     // Execute command
     match cli.command {
         Commands::Init => {
-            println!("🚀 Welcome to r2pilot setup!\n");
-            println!("Pour configurer r2pilot, vous aurez besoin de:");
-            println!("  1. Votre Cloudflare Account ID");
-            println!("  2. Un API Token ou Access Key ID + Secret Access Key");
-            println!("\n📖 Documentation: https://dash.cloudflare.com > API Tokens\n");
-            println!("Utilisez la commande 'r2pilot init' dans le futur pour reconfigurer.");
-            Ok(())
+            wizard::run_init_wizard().await
         }
         Commands::Config { action } => handle_config(action).await,
         Commands::Tokens { action } => handle_tokens(action).await,
