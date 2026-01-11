@@ -1,5 +1,7 @@
 //! Command handlers for r2pilot CLI
 
+use clap::Command;
+use clap_complete::{generate, Shell as ClapShell};
 use crate::wizard::run_init_wizard;
 use anyhow::Result;
 use r2pilot_core::{
@@ -117,100 +119,268 @@ pub async fn handle_config(action: &str) -> Result<()> {
 }
 
 /// Handle tokens commands
-pub async fn handle_tokens(_action: &str, _token_id: Option<&str>) -> Result<()> {
-    println!("⚠️  Gestion des tokens via API non disponible");
-    println!("   Gérez vos tokens depuis le dashboard Cloudflare:");
-    println!("   https://dash.cloudflare.com/profile/api-tokens");
-    println!();
-    println!("   Pour R2, créez des API Tokens depuis:");
-    println!("   https://dash.cloudflare.com/{}/r2/api-tokens", "<account_id>");
+pub async fn handle_tokens(action: &str, token_id: Option<&str>) -> Result<()> {
+    use r2pilot_core::{CloudflareClient, R2TokenBuilder};
 
-    Ok(())
-}
-
-/// Handle buckets commands
-pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
     let config = load_config()?;
 
-    // Get R2 credentials
-    let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
-        return Err(anyhow::anyhow!(
-            "API Token non supporté pour l'instant.\n\
-             Utilisez les Access Keys dans votre configuration.\n\
-             Obtenez vos Access Keys depuis: https://dash.cloudflare.com/{}/r2/api-tokens",
-            config.cloudflare.account_id
-        ));
-    } else {
-        (
-            config.cloudflare.access_key_id.clone().unwrap(),
-            config.cloudflare.secret_access_key.clone().unwrap(),
-        )
-    };
+    // Get API token for Cloudflare API access
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+        "API Token requis pour gérer les tokens.\n\
+         Ajoutez 'api_token' dans votre configuration.\n\
+         Obtenez un API Token depuis: https://dash.cloudflare.com/profile/api-tokens"
+    ))?;
 
-    let bucket = name.unwrap_or(&config.r2.default_bucket);
-
-    let r2_client = R2Client::new(
-        config.cloudflare.endpoint.clone(),
-        access_key_id,
-        secret_access_key,
-        bucket.to_string(),
-    ).await?;
+    let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
 
     match action {
         "list" => {
-            println!("⚠️  Liste des buckets non disponible");
-            println!("   Utilisez le dashboard Cloudflare: https://dash.cloudflare.com/");
+            println!("Liste des API Tokens Cloudflare...");
             println!();
-            println!("Bucket configuré: {}", config.r2.default_bucket);
+
+            let tokens = cf_client.list_tokens().await?;
+
+            if tokens.is_empty() {
+                println!("  Aucun token trouvé");
+            } else {
+                #[derive(Tabled)]
+                struct TokenRow {
+                    name: String,
+                    status: String,
+                    id: String,
+                    issued: String,
+                    expires: String,
+                }
+
+                let rows: Vec<TokenRow> = tokens.iter().map(|t| TokenRow {
+                    name: t.name.clone(),
+                    status: format_status(&t.status),
+                    id: format_id(&t.id),
+                    issued: format_date(&t.issued_on),
+                    expires: t.expires_on.as_ref().map(|d| format_date(d)).unwrap_or_else(|| "Never".to_string()),
+                }).collect();
+
+                println!("{}", Table::new(rows));
+            }
 
             Ok(())
         }
         "create" => {
-            println!("⚠️  Création de bucket non disponible");
-            println!("   Créez le bucket depuis le dashboard Cloudflare:");
-            println!("   https://dash.cloudflare.com/{}/r2/buckets", config.cloudflare.account_id);
+            // Interactive prompt for token creation
+            use dialoguer::{Input, theme::ColorfulTheme};
+
+            let theme = ColorfulTheme::default();
+
+            let name = Input::with_theme(&theme)
+                .with_prompt("Nom du token")
+                .default(format!("r2pilot-{}", chrono::Utc::now().format("%Y%m%d")))
+                .interact()?;
+
+            println!();
+            println!("Création du token '{}'...", name);
+
+            let builder = R2TokenBuilder::new(name.clone(), config.cloudflare.account_id.clone());
+            let params = builder.build();
+
+            let token = cf_client.create_token(params).await?;
+
+            println!("  ✅ Token créé: {}", token.name);
+            println!();
+            println!("  IMPORTANT: Copiez ce token maintenant, il ne sera plus affiché !");
+            println!("  Status: {}", format_status(&token.status));
+            println!();
+            println!("  ⚠️  Sauvegardez ce token dans votre configuration:");
+            println!("     api_token = \"<votre_token>\"");
+
+            Ok(())
+        }
+        "revoke" => {
+            let id = token_id.ok_or_else(|| anyhow::anyhow!("Token ID requis (utilisez 'tokens list' pour voir les IDs)"))?;
+
+            println!("⚠️  Attention: vous allez révoquer le token '{}'", id);
+            println!("  Cette action est IRRÉVERSIBLE !");
+
+            cf_client.revoke_token(id).await?;
+
+            println!("  ✅ Token révoqué: {}", id);
+
+            Ok(())
+        }
+        _ => {
+            println!("Action inconnue: {}", action);
+            println!("Actions disponibles: list, create, revoke");
+            Ok(())
+        }
+    }
+}
+
+/// Format token status with emoji
+fn format_status(status: &str) -> String {
+    match status.to_lowercase().as_str() {
+        "active" => "✅ Active".to_string(),
+        "revoked" => "❌ Revoked".to_string(),
+        "expired" => "⏰ Expired".to_string(),
+        _ => status.to_string(),
+    }
+}
+
+/// Format ID to show only first 8 chars
+fn format_id(id: &str) -> String {
+    if id.len() > 8 {
+        format!("{}...", &id[..8])
+    } else {
+        id.to_string()
+    }
+}
+
+/// Handle buckets commands
+pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
+    use r2pilot_core::CloudflareClient;
+
+    let config = load_config()?;
+
+    match action {
+        "list" => {
+            // List buckets requires Cloudflare API token
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+                "API Token requis pour lister les buckets.\n\
+                 Ajoutez 'api_token' dans votre configuration.\n\
+                 Obtenez un API Token depuis: https://dash.cloudflare.com/{}/r2/api-tokens",
+                config.cloudflare.account_id
+            ))?;
+
+            println!("Liste des buckets R2...");
+            println!();
+
+            let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+            let buckets = cf_client.list_buckets().await?;
+
+            if buckets.is_empty() {
+                println!("  Aucun bucket trouvé");
+            } else {
+                #[derive(Tabled)]
+                struct BucketRow {
+                    name: String,
+                    location: String,
+                    created: String,
+                }
+
+                let rows: Vec<BucketRow> = buckets.iter().map(|b| BucketRow {
+                    name: b.name.clone(),
+                    location: b.location.clone(),
+                    created: format_date(&b.creation_date),
+                }).collect();
+
+                println!("{}", Table::new(rows));
+            }
+            println!();
+            println!("Bucket par défaut: {}", config.r2.default_bucket);
+
+            Ok(())
+        }
+        "create" => {
+            let bucket_name = name.ok_or_else(|| anyhow::anyhow!("Nom du bucket requis"))?;
+
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+                "API Token requis pour créer des buckets.\n\
+                 Ajoutez 'api_token' dans votre configuration.\n\
+                 Obtenez un API Token depuis: https://dash.cloudflare.com/{}/r2/api-tokens",
+                config.cloudflare.account_id
+            ))?;
+
+            println!("Création du bucket '{}'...", bucket_name);
+
+            let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+            let bucket = cf_client.create_bucket(bucket_name, "eu").await?;
+
+            println!("  ✅ Bucket créé: {}", bucket.name);
+            println!("  Location: {}", bucket.location);
 
             Ok(())
         }
         "delete" => {
-            println!("⚠️  Suppression de bucket non disponible");
-            println!("   Supprimez le bucket depuis le dashboard Cloudflare:");
-            println!("   https://dash.cloudflare.com/{}/r2/buckets", config.cloudflare.account_id);
+            let bucket_name = name.ok_or_else(|| anyhow::anyhow!("Nom du bucket requis"))?;
+
+            // Prevent accidental deletion of default bucket
+            if bucket_name == config.r2.default_bucket {
+                return Err(anyhow::anyhow!(
+                    "Impossible de supprimer le bucket par défaut '{}'.\n\
+                     Changez le bucket par défaut dans votre configuration d'abord.",
+                    bucket_name
+                ));
+            }
+
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+                "API Token requis pour supprimer des buckets.\n\
+                 Ajoutez 'api_token' dans votre configuration."
+            ))?;
+
+            println!("⚠️  Attention: vous allez supprimer le bucket '{}'", bucket_name);
+            println!("  Cette action est IRRÉVERSIBLE !");
+
+            let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+            cf_client.delete_bucket(bucket_name).await?;
+
+            println!("  ✅ Bucket supprimé: {}", bucket_name);
 
             Ok(())
         }
-        "info" => {
-            println!("Informations sur le bucket '{}'...", bucket);
-
-            // Try to list objects as a connection test
-            let objects = r2_client.list_objects(None).await?;
-
-            println!("  Name: {}", bucket);
-            println!("  Objects: {}", objects.len());
-
-            Ok(())
-        }
-        "ls" => {
-            println!("Contenu du bucket '{}'...", bucket);
-
-            let objects = r2_client.list_objects(None).await?;
-
-            if objects.is_empty() {
-                println!("  Bucket vide");
+        "info" | "ls" => {
+            // Get R2 credentials for S3 API access
+            let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
+                return Err(anyhow::anyhow!(
+                    "La commande '{}' nécessite les Access Keys R2.\n\
+                     Configurez access_key_id et secret_access_key pour utiliser les opérations S3.",
+                    action
+                ));
             } else {
-                #[derive(Tabled)]
-                struct ObjectRow {
-                    key: String,
-                    size: String,
+                (
+                    config.cloudflare.access_key_id.clone()
+                        .ok_or_else(|| anyhow::anyhow!("Access Key ID non configuré (lancez 'r2pilot init')"))?,
+                    config.cloudflare.secret_access_key.clone()
+                        .ok_or_else(|| anyhow::anyhow!("Secret Access Key non configuré (lancez 'r2pilot init')"))?,
+                )
+            };
+
+            let bucket = name.unwrap_or(&config.r2.default_bucket);
+
+            let r2_client = R2Client::new(
+                config.cloudflare.endpoint.clone(),
+                access_key_id,
+                secret_access_key,
+                bucket.to_string(),
+            ).await?;
+
+            if action == "info" {
+                println!("Informations sur le bucket '{}'...", bucket);
+
+                // Try to list objects as a connection test
+                let objects = r2_client.list_objects(None).await?;
+
+                println!("  Name: {}", bucket);
+                println!("  Objects: {}", objects.len());
+            } else {
+                println!("Contenu du bucket '{}'...", bucket);
+
+                let objects = r2_client.list_objects(None).await?;
+
+                if objects.is_empty() {
+                    println!("  Bucket vide");
+                } else {
+                    #[derive(Tabled)]
+                    struct ObjectRow {
+                        key: String,
+                        size: String,
+                    }
+
+                    let rows: Vec<ObjectRow> = objects.iter().map(|o| ObjectRow {
+                        key: o.key.clone(),
+                        size: format_bytes(o.size),
+                    }).collect();
+
+                    println!();
+                    println!("{}", Table::new(rows));
                 }
-
-                let rows: Vec<ObjectRow> = objects.iter().map(|o| ObjectRow {
-                    key: o.key.clone(),
-                    size: format_bytes(o.size),
-                }).collect();
-
-                println!();
-                println!("{}", Table::new(rows));
             }
 
             Ok(())
@@ -220,6 +390,14 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
             println!("Actions disponibles: list, create, delete, info, ls");
             Ok(())
         }
+    }
+}
+
+/// Format ISO date string to readable format
+fn format_date(iso_date: &str) -> String {
+    match chrono::DateTime::parse_from_rfc3339(iso_date) {
+        Ok(dt) => dt.format("%Y-%m-%d %H:%M").to_string(),
+        Err(_) => iso_date.to_string(),
     }
 }
 
@@ -337,19 +515,63 @@ pub async fn handle_files(
 }
 
 /// Handle URLs commands
-pub async fn handle_urls(action: &str, key: Option<&str>, expires: u64, _output: &str) -> Result<()> {
+pub async fn handle_urls(action: &str, key: Option<&str>, expires: u64, output: &str) -> Result<()> {
     if action != "generate" {
         println!("Action inconnue: {}", action);
         println!("Actions disponibles: generate");
         return Ok(());
     }
 
-    let _key = key.ok_or_else(|| anyhow::anyhow!("Clé R2 requise"))?;
+    let key = key.ok_or_else(|| anyhow::anyhow!("Clé R2 requise"))?;
+    let config = load_config()?;
 
-    println!("⚠️  Génération d'URLs signées non disponible");
-    println!("   Utilisez le dashboard Cloudflare ou le presigned URL SDK");
-    println!();
-    println!("   Expiration: {}s", expires);
+    // Get R2 credentials
+    let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
+        return Err(anyhow::anyhow!(
+            "API Token non supporté pour l'instant.\n\
+             Utilisez les Access Keys dans votre configuration.\n\
+             Obtenez vos Access Keys depuis: https://dash.cloudflare.com/{}/r2/api-tokens",
+            config.cloudflare.account_id
+        ));
+    } else {
+        (
+            config.cloudflare.access_key_id.clone().unwrap(),
+            config.cloudflare.secret_access_key.clone().unwrap(),
+        )
+    };
+
+    let r2_client = R2Client::new(
+        config.cloudflare.endpoint.clone(),
+        access_key_id,
+        secret_access_key,
+        config.r2.default_bucket.clone(),
+    ).await?;
+
+    println!("Génération URL signée pour {} (expires: {}s)...", key, expires);
+
+    let url = r2_client.generate_presigned_url(
+        key,
+        std::time::Duration::from_secs(expires),
+    ).await?;
+
+    match output {
+        "json" => {
+            println!();
+            println!("{}", serde_json::json!({
+                "key": key,
+                "url": url,
+                "expires_in": expires,
+                "expires_at": chrono::Utc::now() + chrono::Duration::seconds(expires as i64)
+            }).to_string());
+        }
+        _ => {
+            println!();
+            println!("  ✅ URL générée:");
+            println!("  {}", url);
+            println!();
+            println!("  Expire dans: {}s", expires);
+        }
+    }
 
     Ok(())
 }
@@ -432,4 +654,74 @@ fn format_bytes(bytes: i64) -> String {
     }
 
     format!("{:.2} {}", size, UNITS[unit_index])
+}
+
+/// Handle shell completion generation
+pub async fn handle_completion(shell: &str, cmd: &mut Command) -> Result<()> {
+    use std::io;
+
+    let clap_shell = match shell {
+        "bash" => ClapShell::Bash,
+        "zsh" => ClapShell::Zsh,
+        "fish" => ClapShell::Fish,
+        "elvish" => ClapShell::Elvish,
+        "powershell" | "pwsh" => ClapShell::PowerShell,
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Shell non supporté: {}\nShells supportés: bash, zsh, fish, elvish, powershell",
+                shell
+            ));
+        }
+    };
+
+    println!("Génération de la completion pour {:?}...", clap_shell);
+    println!();
+
+    // Generate completion script
+    generate(clap_shell, cmd, "r2pilot", &mut io::stdout());
+
+    println!();
+    println!("✅ Completion générée !");
+    println!();
+    println!("Instructions d'installation:");
+
+    match shell {
+        "bash" => {
+            println!("  # Ajoutez à votre ~/.bashrc:");
+            println!("  source <(r2pilot completion bash)");
+            println!();
+            println!("  # Ou pour une installation permanente:");
+            println!("  r2pilot completion bash > ~/.local/share/bash-completion/completions/r2pilot");
+        }
+        "zsh" => {
+            println!("  # Ajoutez à votre ~/.zshrc:");
+            println!("  source <(r2pilot completion zsh)");
+            println!();
+            println!("  # Ou pour une installation permanente:");
+            println!("  r2pilot completion zsh > ~/.zsh/completion/_r2pilot");
+            println!("  # puis ajoutez à ~/.zshrc:");
+            println!("  fpath=(~/.zsh/completion $fpath)");
+            println!("  autoload -U compinit && compinit");
+        }
+        "fish" => {
+            println!("  # Ajoutez à votre ~/.config/fish/completions/r2pilot.fish:");
+            println!("  r2pilot completion fish > ~/.config/fish/completions/r2pilot.fish");
+        }
+        "elvish" => {
+            println!("  # Ajoutez à votre ~/.elvish/rc.elv:");
+            println!("  r2pilot completion elvish > ~/.elvish/lib/r2pilot.elv");
+            println!("  # puis ajoutez à votre rc.elv:");
+            println!("  use ~/.elvish/lib/r2pilot");
+        }
+        "powershell" | "pwsh" => {
+            println!("  # Exécutez dans PowerShell:");
+            println!("  r2pilot completion powershell | Out-String | Invoke-Expression");
+            println!();
+            println!("  # Ou ajoutez à votre PowerShell Profile:");
+            println!("  r2pilot completion powershell > $PROFILE");
+        }
+        _ => {}
+    }
+
+    Ok(())
 }

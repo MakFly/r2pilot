@@ -1,6 +1,5 @@
 use anyhow::Result;
-use clap::Parser;
-use clap_complete::Shell as ClapShell;
+use clap::{Parser, CommandFactory};
 use color_eyre::config::HookBuilder;
 
 mod handlers;
@@ -221,21 +220,7 @@ async fn main() -> Result<()> {
             handlers::handle_urls(action_str, key.as_deref(), expires, &output).await
         }
         Commands::Completion { shell } => {
-            let clap_shell = match shell.as_str() {
-                "bash" => ClapShell::Bash,
-                "zsh" => ClapShell::Zsh,
-                "fish" => ClapShell::Fish,
-                "elvish" => ClapShell::Elvish,
-                "powershell" => ClapShell::PowerShell,
-                _ => {
-                    println!("Shell non supporté: {}", shell);
-                    println!("Shells supportés: bash, zsh, fish, elvish, powershell");
-                    return Ok(());
-                }
-            };
-            println!("Shell completion pour {:?}", clap_shell);
-            // TODO: Generate completion scripts
-            Ok(())
+            handlers::handle_completion(&shell, &mut Cli::command()).await
         }
         Commands::Doctor { action } => {
             let action_str = match action {

@@ -177,12 +177,14 @@ impl CloudflareClient {
 struct CloudflareResponse<T> {
     success: bool,
     errors: Vec<CloudflareError>,
+    #[allow(dead_code)]
     messages: Vec<CloudflareMessage>,
     result: T,
 }
 
 /// Cloudflare error
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CloudflareError {
     code: i32,
     message: String,
@@ -190,6 +192,7 @@ struct CloudflareError {
 
 /// Cloudflare message
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct CloudflareMessage {
     code: i32,
     message: String,

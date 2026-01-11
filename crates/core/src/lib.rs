@@ -10,7 +10,7 @@ pub mod error;
 
 // Re-export commonly used types
 pub use client::R2Client;
-pub use cloudflare::CloudflareClient;
+pub use cloudflare::{CloudflareClient, R2TokenBuilder, R2Bucket, ApiToken};
 pub use config::{Config, ConfigFile, R2Config, CloudflareConfig};
 pub use config::{load_config, save_config, validate_config, config_exists, get_config_path};
 pub use error::{Error, Result};

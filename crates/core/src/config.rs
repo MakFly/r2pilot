@@ -237,3 +237,80 @@ pub fn config_exists() -> bool {
 
 /// Public alias for ConfigFile (used by lib.rs)
 pub use ConfigFile as Config;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_valid_config() -> ConfigFile {
+        ConfigFile {
+            cloudflare: CloudflareConfig {
+                account_id: "0123456789abcdef0123456789abcdef".to_string(),
+                api_token: Some("test_token".to_string()),
+                endpoint: "https://test.r2.cloudflarestorage.com".to_string(),
+                access_key_id: None,
+                secret_access_key: None,
+            },
+            r2: R2Config {
+                default_bucket: "test-bucket".to_string(),
+                region: "auto".to_string(),
+                default_expiration: 3600,
+            },
+            advanced: None,
+            logging: None,
+            output: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_config_valid() {
+        let config = make_valid_config();
+        assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_invalid_account_id() {
+        let mut config = make_valid_config();
+        config.cloudflare.account_id = "too_short".to_string();
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_config_no_auth() {
+        let mut config = make_valid_config();
+        config.cloudflare.api_token = None;
+        config.cloudflare.access_key_id = None;
+        config.cloudflare.secret_access_key = None;
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_config_with_access_keys() {
+        let mut config = make_valid_config();
+        config.cloudflare.api_token = None;
+        config.cloudflare.access_key_id = Some("test_key_id".to_string());
+        config.cloudflare.secret_access_key = Some("test_secret".to_string());
+        assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_validate_config_empty_bucket() {
+        let mut config = make_valid_config();
+        config.r2.default_bucket = "".to_string();
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_config_expiration_too_long() {
+        let mut config = make_valid_config();
+        config.r2.default_expiration = 604801; // More than 7 days
+        assert!(validate_config(&config).is_err());
+    }
+
+    #[test]
+    fn test_validate_config_expiration_boundary() {
+        let mut config = make_valid_config();
+        config.r2.default_expiration = 604800; // Exactly 7 days
+        assert!(validate_config(&config).is_ok());
+    }
+}

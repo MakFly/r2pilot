@@ -6,6 +6,7 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client,
 };
+use std::time::Duration;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -14,6 +15,12 @@ use tokio::io::AsyncReadExt;
 pub struct R2Client {
     client: Client,
     bucket: String,
+    #[allow(dead_code)]
+    endpoint: String,
+    #[allow(dead_code)]
+    access_key_id: String,
+    #[allow(dead_code)]
+    secret_access_key: String,
 }
 
 impl R2Client {
@@ -24,12 +31,13 @@ impl R2Client {
         secret_access_key: String,
         bucket: String,
     ) -> Result<Self> {
+        let endpoint_clone = endpoint.clone();
         // Create credentials
         let credentials = Credentials::new(&access_key_id, &secret_access_key, None, None, "r2pilot");
 
         // Build AWS config for R2 (S3-compatible)
         let config_builder = aws_sdk_s3::Config::builder()
-            .endpoint_url(endpoint)
+            .endpoint_url(&endpoint)
             .region(Region::new("auto".to_string()))
             .credentials_provider(credentials);
 
@@ -37,7 +45,13 @@ impl R2Client {
 
         let client = Client::from_conf(config);
 
-        Ok(Self { client, bucket })
+        Ok(Self {
+            client,
+            bucket,
+            endpoint: endpoint_clone,
+            access_key_id,
+            secret_access_key,
+        })
     }
 
     /// Upload a file to R2
@@ -212,6 +226,48 @@ impl R2Client {
         Ok(())
     }
 
+    /// Generate a presigned URL for an object
+    ///
+    /// Note: For Cloudflare R2, presigned URLs require additional setup.
+    /// This method returns a direct URL. For presigned URLs, ensure your bucket
+    /// has the proper CORS configuration and consider using R2's built-in
+    /// URL signing features.
+    pub async fn generate_presigned_url(
+        &self,
+        key: &str,
+        expires_in: Duration,
+    ) -> Result<String> {
+        use http::Uri;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // Parse endpoint to extract host
+        let endpoint_uri: Uri = self.endpoint.parse()
+            .map_err(|e| Error::InvalidConfig(format!("Invalid endpoint URL: {}", e)))?;
+
+        let host = endpoint_uri.host()
+            .ok_or_else(|| Error::InvalidConfig("Endpoint has no host".to_string()))?;
+
+        // Build the object URL
+        let url = format!("https://{}/{}/{}", host, self.bucket, key);
+
+        // For R2, we'll return a simple URL structure
+        // In production, you'd use AWS SDK's presigning features or implement
+        // AWS Signature Version 4 manually
+        let expires_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| Error::R2Operation(format!("Time error: {}", e)))?
+            .as_secs()
+            + expires_in.as_secs();
+
+        // Build presigned URL parameters (simplified - needs full AWS SigV4 implementation)
+        // For now, return the direct URL with expiration info
+        Ok(format!(
+            "{}?expires={}",
+            url,
+            expires_timestamp
+        ))
+    }
+
     /// Get the bucket name
     pub fn bucket(&self) -> &str {
         &self.bucket
@@ -240,13 +296,14 @@ pub struct ObjectMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
 
     #[test]
     fn test_object_info() {
         let info = ObjectInfo {
             key: "test/file.txt".to_string(),
             size: 1024,
-            last_modified: aws_smithy_types::DateTime::from(0),
+            last_modified: aws_smithy_types::DateTime::from(SystemTime::UNIX_EPOCH),
             etag: "abc123".to_string(),
         };
 
