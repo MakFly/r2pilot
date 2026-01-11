@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         rust: [stable]
         exclude: []
 
@@ -58,16 +58,12 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: r2pilot-linux
             binary_name: r2pilot
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: r2pilot-windows
-            binary_name: r2pilot.exe
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: r2pilot-macos
@@ -98,11 +94,7 @@ jobs:
       shell: bash
       run: |
         cd target/release
-        if [ "${{ runner.os }}" = "Windows" ]; then
-          7z a ../../${{ matrix.artifact_name }}.zip ${{ matrix.binary_name }}
-        else
-          tar -czf ../../${{ matrix.artifact_name }}.tar.gz ${{ matrix.binary_name }}
-        fi
+        tar -czf ../../${{ matrix.artifact_name }}.tar.gz ${{ matrix.binary_name }}
 
     - name: Upload binaries
       uses: actions/upload-artifact@v4
@@ -131,7 +123,6 @@ jobs:
       with:
         files: |
           release-bundle/r2pilot-linux.*
-          release-bundle/r2pilot-windows.*
           release-bundle/r2pilot-macos.*
           release-bundle/SHA256SUMS
         draft: false
