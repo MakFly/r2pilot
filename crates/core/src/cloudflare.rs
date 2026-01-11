@@ -27,7 +27,7 @@ impl CloudflareClient {
     pub async fn list_tokens(&self) -> Result<Vec<ApiToken>> {
         let response = self
             .http_client
-            .get(&format!("{}/user/tokens", self.base_url))
+            .get(format!("{}/user/tokens", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_token))
             .header("Content-Type", "application/json")
             .send()
@@ -40,7 +40,7 @@ impl CloudflareClient {
     pub async fn create_token(&self, params: CreateTokenParams) -> Result<ApiToken> {
         let response = self
             .http_client
-            .post(&format!("{}/user/tokens", self.base_url))
+            .post(format!("{}/user/tokens", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_token))
             .header("Content-Type", "application/json")
             .json(&params)
@@ -54,7 +54,7 @@ impl CloudflareClient {
     pub async fn revoke_token(&self, token_id: &str) -> Result<()> {
         let response = self
             .http_client
-            .delete(&format!("{}/user/tokens/{}", self.base_url, token_id))
+            .delete(format!("{}/user/tokens/{}", self.base_url, token_id))
             .header("Authorization", format!("Bearer {}", self.api_token))
             .header("Content-Type", "application/json")
             .send()
@@ -68,7 +68,7 @@ impl CloudflareClient {
     pub async fn list_buckets(&self) -> Result<Vec<R2Bucket>> {
         let response = self
             .http_client
-            .get(&format!(
+            .get(format!(
                 "{}/accounts/{}/r2/buckets",
                 self.base_url, self.account_id
             ))
@@ -84,7 +84,7 @@ impl CloudflareClient {
     pub async fn get_bucket(&self, name: &str) -> Result<R2Bucket> {
         let response = self
             .http_client
-            .get(&format!(
+            .get(format!(
                 "{}/accounts/{}/r2/buckets/{}",
                 self.base_url, self.account_id, name
             ))
@@ -107,7 +107,7 @@ impl CloudflareClient {
 
         let response = self
             .http_client
-            .post(&format!(
+            .post(format!(
                 "{}/accounts/{}/r2/buckets",
                 self.base_url, self.account_id
             ))
@@ -124,7 +124,7 @@ impl CloudflareClient {
     pub async fn delete_bucket(&self, name: &str) -> Result<()> {
         let response = self
             .http_client
-            .delete(&format!(
+            .delete(format!(
                 "{}/accounts/{}/r2/buckets/{}",
                 self.base_url, self.account_id, name
             ))
@@ -143,7 +143,7 @@ impl CloudflareClient {
     pub async fn get_bucket_cors(&self, bucket_name: &str) -> Result<BucketCorsConfig> {
         let response = self
             .http_client
-            .get(&format!(
+            .get(format!(
                 "{}/accounts/{}/r2/buckets/{}/cors",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -163,7 +163,7 @@ impl CloudflareClient {
     ) -> Result<()> {
         let response = self
             .http_client
-            .put(&format!(
+            .put(format!(
                 "{}/accounts/{}/r2/buckets/{}/cors",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -181,7 +181,7 @@ impl CloudflareClient {
     pub async fn delete_bucket_cors(&self, bucket_name: &str) -> Result<()> {
         let response = self
             .http_client
-            .delete(&format!(
+            .delete(format!(
                 "{}/accounts/{}/r2/buckets/{}/cors",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -200,7 +200,7 @@ impl CloudflareClient {
     pub async fn get_bucket_lifecycle(&self, bucket_name: &str) -> Result<LifecycleConfiguration> {
         let response = self
             .http_client
-            .get(&format!(
+            .get(format!(
                 "{}/accounts/{}/r2/buckets/{}/lifecycle",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -220,7 +220,7 @@ impl CloudflareClient {
     ) -> Result<()> {
         let response = self
             .http_client
-            .put(&format!(
+            .put(format!(
                 "{}/accounts/{}/r2/buckets/{}/lifecycle",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -238,7 +238,7 @@ impl CloudflareClient {
     pub async fn delete_bucket_lifecycle(&self, bucket_name: &str) -> Result<()> {
         let response = self
             .http_client
-            .delete(&format!(
+            .delete(format!(
                 "{}/accounts/{}/r2/buckets/{}/lifecycle",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -261,7 +261,7 @@ impl CloudflareClient {
     ) -> Result<()> {
         let response = self
             .http_client
-            .put(&format!(
+            .put(format!(
                 "{}/accounts/{}/r2/buckets/{}/website",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -279,7 +279,7 @@ impl CloudflareClient {
     pub async fn get_bucket_website(&self, bucket_name: &str) -> Result<WebsiteConfiguration> {
         let response = self
             .http_client
-            .get(&format!(
+            .get(format!(
                 "{}/accounts/{}/r2/buckets/{}/website",
                 self.base_url, self.account_id, bucket_name
             ))
@@ -295,7 +295,7 @@ impl CloudflareClient {
     pub async fn delete_bucket_website(&self, bucket_name: &str) -> Result<()> {
         let response = self
             .http_client
-            .delete(&format!(
+            .delete(format!(
                 "{}/accounts/{}/r2/buckets/{}/website",
                 self.base_url, self.account_id, bucket_name
             ))

@@ -105,6 +105,7 @@ pub async fn load_cors_from_file(file_path: &str) -> Result<BucketCorsConfig> {
 }
 
 /// Save CORS config to JSON file
+#[allow(dead_code)]
 pub async fn save_cors_to_file(file_path: &str, config: &BucketCorsConfig) -> Result<()> {
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| anyhow::anyhow!("Failed to serialize config: {}", e))?;

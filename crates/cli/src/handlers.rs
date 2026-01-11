@@ -638,7 +638,6 @@ pub async fn handle_urls(
                     "expires_in": expires,
                     "expires_at": chrono::Utc::now() + chrono::Duration::seconds(expires as i64)
                 })
-                .to_string()
             );
         }
         _ => {

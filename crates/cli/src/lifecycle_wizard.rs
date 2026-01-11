@@ -113,6 +113,7 @@ pub async fn load_lifecycle_from_file(file_path: &str) -> Result<LifecycleConfig
 }
 
 /// Save Lifecycle config to JSON file
+#[allow(dead_code)]
 pub async fn save_lifecycle_to_file(
     file_path: &str,
     config: &LifecycleConfiguration,

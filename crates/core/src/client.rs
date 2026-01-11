@@ -95,15 +95,13 @@ impl R2Client {
     /// Upload a file to R2
     pub async fn upload_file(&self, key: &str, file_path: &Path, content_type: &str) -> Result<()> {
         // Read file content
-        let mut file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
+        let mut file = File::open(file_path).await.map_err(Error::Io)?;
 
-        let metadata = file.metadata().await.map_err(|e| Error::Io(e))?;
+        let metadata = file.metadata().await.map_err(Error::Io)?;
         let buffer_size = metadata.len() as usize;
         let mut buffer = Vec::with_capacity(buffer_size);
 
-        file.read_to_end(&mut buffer)
-            .await
-            .map_err(|e| Error::Io(e))?;
+        file.read_to_end(&mut buffer).await.map_err(Error::Io)?;
 
         // Upload to R2
         self.upload_bytes(key, buffer, content_type).await
@@ -138,15 +136,11 @@ impl R2Client {
 
         // Create parent directories if needed
         if let Some(parent) = dest_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| Error::Io(e))?;
+            tokio::fs::create_dir_all(parent).await.map_err(Error::Io)?;
         }
 
         // Write file
-        tokio::fs::write(dest_path, data)
-            .await
-            .map_err(|e| Error::Io(e))?;
+        tokio::fs::write(dest_path, data).await.map_err(Error::Io)?;
 
         Ok(())
     }
@@ -373,12 +367,12 @@ impl R2Client {
         use tokio::io::AsyncReadExt;
 
         // Open file and get size
-        let file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
-        let metadata = file.metadata().await.map_err(|e| Error::Io(e))?;
+        let file = File::open(file_path).await.map_err(Error::Io)?;
+        let metadata = file.metadata().await.map_err(Error::Io)?;
         let file_size = metadata.len();
 
         // Calculate number of parts
-        let _total_parts = (file_size as usize + config.chunk_size - 1) / config.chunk_size;
+        let _total_parts = (file_size as usize).div_ceil(config.chunk_size);
 
         // Initiate multipart upload
         let upload_id = self.create_multipart_upload(key, content_type).await?;
@@ -388,14 +382,14 @@ impl R2Client {
         let mut current_part = 0;
 
         // Reopen file for reading chunks
-        let mut file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
+        let mut file = File::open(file_path).await.map_err(Error::Io)?;
 
         loop {
             current_part += 1;
 
             // Read chunk
             let mut buffer = vec![0u8; config.chunk_size.min(100 * 1024 * 1024)];
-            let n = file.read(&mut buffer).await.map_err(|e| Error::Io(e))?;
+            let n = file.read(&mut buffer).await.map_err(Error::Io)?;
 
             if n == 0 {
                 break;
