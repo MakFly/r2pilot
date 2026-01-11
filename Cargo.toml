@@ -1,0 +1,52 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Kev <kev@m7academy.com>"]
+license = "MIT"
+
+[workspace.dependencies]
+# CLI & Parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# AWS S3 SDK (R2 compatible)
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.55"
+aws-smithy-types = "1.2"
+
+# HTTP & API
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+color-eyre = "0.6"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# File system
+dirs = "5.0"
+walkdir = "2.5"
+
+# Tableaux & Output
+tabled = "0.16"
+
+# Crypto (credentials)
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"

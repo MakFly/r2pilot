@@ -1,0 +1,10 @@
+[http]
+check-revoke = false
+
+[build]
+# Use rustls instead of native TLS (OpenSSL)
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["--cfg", "aws_sdk_unstable"]
+
+[net]
+git-fetch-with-cli = true

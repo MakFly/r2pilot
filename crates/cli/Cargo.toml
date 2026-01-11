@@ -1,0 +1,37 @@
+[package]
+name = "r2pilot"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "r2pilot"
+path = "src/main.rs"
+
+[dependencies]
+# Core library
+r2pilot-core = { path = "../core" }
+
+# CLI & Parsing
+clap.workspace = true
+clap_complete = "4.5"
+dialoguer.workspace = true
+indicatif.workspace = true
+console.workspace = true
+
+# Error handling
+anyhow.workspace = true
+color-eyre.workspace = true
+
+# Output
+tabled.workspace = true
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Tokio runtime
+tokio.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"

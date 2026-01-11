@@ -1,0 +1,30 @@
+[package]
+name = "r2pilot-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+dirs.workspace = true
+aes-gcm.workspace = true
+argon2.workspace = true
+rand.workspace = true
+
+# AWS SDK for R2
+aws-config.workspace = true
+aws-sdk-s3.workspace = true
+aws-smithy-types.workspace = true
+
+# OpenSSL with vendored feature (compile from source)
+openssl-sys = { version = "0.9", features = ["vendored"] }
+
+# Logging
+tracing.workspace = true
