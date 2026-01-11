@@ -17,8 +17,11 @@
 ### Fonctionnalités
 
 - **Gestion des buckets** : Lister, créer, supprimer des buckets
-- **Opérations sur les fichiers** : Upload, téléchargement, suppression
-- **URLs signées** : Générer des URLs présignées pour un accès temporaire
+- **Opérations sur les fichiers** : Upload, téléchargement, suppression avec multipart automatique
+- **URLs signées** : Générer des URLs présignées pour GET, PUT, DELETE
+- **CORS** : Configuration CORS interactive ou via JSON
+- **Lifecycle Rules** : Règles de cycle de vie pour la suppression automatique
+- **Website/Hosting** : Configuration de l'hébergement statique (public bucket)
 - **Configuration interactive** : Assistant de configuration guidé
 - **Authentification multiple** : Support des API Tokens et Access Keys
 
@@ -161,6 +164,12 @@ Gérer les fichiers dans R2.
 # Upload un fichier
 r2pilot files upload fichier-local.txt chemin/distant.txt --bucket mon-bucket --progress
 
+# Upload un gros fichier en multipart (automatique >100MB)
+r2pilot files upload largefile.iso backups/large.iso --progress
+
+# Forcer l'upload multipart
+r2pilot files upload fichier.txt chemin/fichier.txt --multipart
+
 # Télécharger un fichier
 r2pilot files download chemin/distant.txt fichier-local.txt --bucket mon-bucket
 
@@ -176,8 +185,11 @@ r2pilot files ls --prefix chemin/vers/
 Générer des URLs signées.
 
 ```bash
-# Générer une URL signée (défaut: 2 heures)
+# Générer une URL signée GET (défaut: 2 heures)
 r2pilot urls generate chemin/vers/fichier.txt
+
+# Méthode personnalisée (GET, PUT, DELETE)
+r2pilot urls generate chemin/vers/fichier.txt --method put --expires 3600 --content-type video/mp4
 
 # Expiration personnalisée (en secondes)
 r2pilot urls generate chemin/vers/fichier.txt --expires 3600
@@ -185,6 +197,92 @@ r2pilot urls generate chemin/vers/fichier.txt --expires 3600
 # Sortie JSON
 r2pilot urls generate chemin/vers/fichier.txt --output json
 ```
+
+### cors
+
+Gérer la configuration CORS des buckets.
+
+```bash
+# Voir la configuration CORS
+r2pilot cors get
+
+# Configurer CORS en mode interactif
+r2pilot cors set --interactive
+
+# Configurer CORS via un fichier JSON
+r2pilot cors set --file cors.json
+
+# Supprimer la configuration CORS
+r2pilot cors delete
+```
+
+**Exemple de fichier CORS JSON :**
+```json
+{
+  "rules": [
+    {
+      "allowedOrigins": ["https://example.com", "https://app.example.com"],
+      "allowedMethods": ["GET", "PUT", "DELETE", "HEAD"],
+      "allowedHeaders": ["*"],
+      "maxAgeSeconds": 86400
+    }
+  ]
+}
+```
+
+### lifecycle
+
+Gérer les règles de cycle de vie des objets.
+
+```bash
+# Voir les règles de cycle de vie
+r2pilot lifecycle get
+
+# Configurer les règles en mode interactif
+r2pilot lifecycle set --interactive
+
+# Configurer via un fichier JSON
+r2pilot lifecycle set --file lifecycle.json
+
+# Supprimer les règles de cycle de vie
+r2pilot lifecycle delete
+```
+
+**Exemple de fichier Lifecycle JSON :**
+```json
+{
+  "rules": [
+    {
+      "id": "delete-old-videos",
+      "filter": {
+        "prefix": "videos/"
+      },
+      "status": "Enabled",
+      "expiration": {
+        "days": 30
+      }
+    }
+  ]
+}
+```
+
+### website
+
+Gérer l'hébergement statique (public bucket).
+
+```bash
+# Activer l'hébergement statique
+r2pilot website enable --index index.html --error 404.html
+
+# Voir la configuration website
+r2pilot website get
+
+# Désactiver l'hébergement statique
+r2pilot website disable
+```
+
+**Note :** Une fois activé, votre bucket sera accessible publiquement via :
+`https://<bucket_name>.<account_id>.r2.cloudflarestorage.com/<file_path>`
 
 ### completion
 
@@ -233,6 +331,9 @@ r2pilot files upload video.mp4 raw/video-2024-01.mp4 --progress
 
 # Upload vers un bucket spécifique
 r2pilot files upload video.mp4 videos/january.mp4 --bucket mes-videos
+
+# Upload d'un gros fichier (>100MB) avec multipart automatique
+r2pilot files upload largefile.iso backups/large.iso --progress
 ```
 
 ### Générer un lien partageable
@@ -244,8 +345,51 @@ r2pilot urls generate videos/january.mp4
 # Générer un lien valide 1 heure
 r2pilot urls generate videos/january.mp4 --expires 3600
 
+# Générer une URL PUT pour un upload direct depuis le navigateur
+r2pilot urls generate uploads/video.mp4 --method put --expires 3600 --content-type video/mp4
+
 # Obtenir une sortie JSON pour les scripts
 r2pilot urls generate videos/january.mp4 --output json
+```
+
+### Configurer CORS pour une application web
+
+```bash
+# Mode interactif
+r2pilot cors set --interactive
+
+# Via un fichier JSON
+r2pilot cors set --file cors.json
+
+# Vérifier la configuration
+r2pilot cors get
+```
+
+### Configurer la suppression automatique (Lifecycle)
+
+```bash
+# Mode interactif - supprimer les vidéos de plus de 30 jours
+r2pilot lifecycle set --interactive
+
+# Via un fichier JSON
+r2pilot lifecycle set --file lifecycle.json
+
+# Vérifier les règles
+r2pilot lifecycle get
+```
+
+### Héberger un site statique
+
+```bash
+# Activer l'hébergement statique
+r2pilot website enable --index index.html --error 404.html
+
+# Uploader les fichiers de votre site
+r2pilot files upload index.html index.html
+r2pilot files upload styles.css styles.css
+
+# Votre site est maintenant accessible !
+# URL: https://<bucket>.<account_id>.r2.cloudflarestorage.com/index.html
 ```
 
 ### Lister et gérer les buckets

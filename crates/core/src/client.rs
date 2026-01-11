@@ -11,6 +11,43 @@ use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
+// === Multipart Upload Types ===
+
+/// Configuration for multipart upload
+#[derive(Debug, Clone)]
+pub struct MultipartUploadConfig {
+    /// Chunk size in bytes (default: 100MB)
+    pub chunk_size: usize,
+    /// Maximum concurrent uploads (default: 5)
+    pub concurrent_parts: usize,
+}
+
+impl Default for MultipartUploadConfig {
+    fn default() -> Self {
+        Self {
+            chunk_size: 100 * 1024 * 1024, // 100MB
+            concurrent_parts: 5,
+        }
+    }
+}
+
+/// Progress information for multipart upload
+#[derive(Debug, Clone)]
+pub struct MultipartUploadProgress {
+    pub upload_id: String,
+    pub total_bytes: u64,
+    pub uploaded_bytes: u64,
+    pub completed_parts: usize,
+    pub total_parts: usize,
+}
+
+/// A completed part in a multipart upload
+#[derive(Debug, Clone)]
+pub struct CompletedPart {
+    pub part_number: i32,
+    pub etag: String,
+}
+
 /// R2 client for managing Cloudflare R2 storage
 pub struct R2Client {
     client: Client,
@@ -226,6 +263,161 @@ impl R2Client {
         Ok(())
     }
 
+    // === Multipart Upload Operations ===
+
+    /// Initiate a multipart upload
+    pub async fn create_multipart_upload(&self, key: &str, content_type: &str) -> Result<String> {
+        let response = self
+            .client
+            .create_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .content_type(content_type)
+            .send()
+            .await?;
+
+        response
+            .upload_id()
+            .map(|id| id.to_string())
+            .ok_or_else(|| Error::MultipartUpload("No upload ID returned".to_string()))
+    }
+
+    /// Upload a single part in a multipart upload
+    pub async fn upload_part(
+        &self,
+        key: &str,
+        upload_id: &str,
+        part_number: i32,
+        body: Vec<u8>,
+    ) -> Result<CompletedPart> {
+        let response = self
+            .client
+            .upload_part()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .part_number(part_number)
+            .body(ByteStream::from(body))
+            .send()
+            .await?;
+
+        let etag = response
+            .e_tag()
+            .map(|etag| etag.to_string())
+            .ok_or_else(|| Error::MultipartUpload("No ETag returned for part".to_string()))?;
+
+        Ok(CompletedPart {
+            part_number,
+            etag,
+        })
+    }
+
+    /// Complete a multipart upload
+    pub async fn complete_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+        parts: Vec<CompletedPart>,
+    ) -> Result<()> {
+        // Convert our CompletedPart to AWS SDK CompletedPart
+        let aws_parts: Vec<aws_sdk_s3::types::CompletedPart> = parts
+            .iter()
+            .map(|p| {
+                aws_sdk_s3::types::CompletedPart::builder()
+                    .part_number(p.part_number)
+                    .e_tag(&p.etag)
+                    .build()
+            })
+            .collect();
+
+        // Build the multipart upload with all parts
+        let multipart_upload = aws_sdk_s3::types::CompletedMultipartUpload::builder()
+            .set_parts(Some(aws_parts))
+            .build();
+
+        self.client
+            .complete_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .multipart_upload(multipart_upload)
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    /// Abort a multipart upload (cleanup on error)
+    pub async fn abort_multipart_upload(&self, key: &str, upload_id: &str) -> Result<()> {
+        self.client
+            .abort_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    /// Upload a file using multipart upload
+    pub async fn upload_file_multipart(
+        &self,
+        key: &str,
+        file_path: &Path,
+        content_type: &str,
+        config: MultipartUploadConfig,
+    ) -> Result<()> {
+        use tokio::io::AsyncReadExt;
+
+        // Open file and get size
+        let file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
+        let metadata = file.metadata().await.map_err(|e| Error::Io(e))?;
+        let file_size = metadata.len();
+
+        // Calculate number of parts
+        let _total_parts = (file_size as usize + config.chunk_size - 1) / config.chunk_size;
+
+        // Initiate multipart upload
+        let upload_id = self.create_multipart_upload(key, content_type).await?;
+
+        // Read and upload parts
+        let mut parts = Vec::new();
+        let mut current_part = 0;
+
+        // Reopen file for reading chunks
+        let mut file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
+
+        loop {
+            current_part += 1;
+
+            // Read chunk
+            let mut buffer = vec![0u8; config.chunk_size.min(100 * 1024 * 1024)];
+            let n = file.read(&mut buffer).await.map_err(|e| Error::Io(e))?;
+
+            if n == 0 {
+                break;
+            }
+
+            buffer.truncate(n);
+
+            // Upload part
+            match self.upload_part(key, &upload_id, current_part, buffer).await {
+                Ok(part) => parts.push(part),
+                Err(e) => {
+                    // Abort on error
+                    let _ = self.abort_multipart_upload(key, &upload_id).await;
+                    return Err(e);
+                }
+            }
+        }
+
+        // Complete multipart upload
+        self.complete_multipart_upload(key, &upload_id, parts).await?;
+
+        Ok(())
+    }
+
     /// Generate a presigned URL for an object
     ///
     /// Note: For Cloudflare R2, presigned URLs require additional setup.
@@ -272,6 +464,11 @@ impl R2Client {
     pub fn bucket(&self) -> &str {
         &self.bucket
     }
+}
+
+/// Check if a file requires multipart upload (>100MB)
+pub fn requires_multipart_upload(file_size: u64) -> bool {
+    file_size > 100 * 1024 * 1024
 }
 
 /// Object information

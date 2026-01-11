@@ -4,6 +4,8 @@ use color_eyre::config::HookBuilder;
 
 mod handlers;
 mod wizard;
+mod cors_wizard;
+mod lifecycle_wizard;
 
 /// r2pilot - CLI to manage Cloudflare R2
 #[derive(Parser, Debug)]
@@ -63,6 +65,24 @@ enum Commands {
         #[command(subcommand)]
         action: DoctorAction,
     },
+
+    /// CORS configuration management
+    Cors {
+        #[command(subcommand)]
+        action: CorsAction,
+    },
+
+    /// Lifecycle rules management
+    Lifecycle {
+        #[command(subcommand)]
+        action: LifecycleAction,
+    },
+
+    /// Public bucket settings (static hosting)
+    Website {
+        #[command(subcommand)]
+        action: WebsiteAction,
+    },
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -113,6 +133,9 @@ enum FileAction {
         /// Show progress bar
         #[arg(short, long)]
         progress: bool,
+        /// Force multipart upload
+        #[arg(long)]
+        multipart: bool,
     },
     /// Download a file
     Download {
@@ -148,9 +171,15 @@ enum UrlAction {
     Generate {
         /// R2 key
         key: String,
+        /// HTTP method (get, put, delete)
+        #[arg(short, long, default_value = "get")]
+        method: String,
         /// Expiration in seconds (default: 7200)
         #[arg(short, long, default_value = "7200")]
         expires: u64,
+        /// Content type (for PUT requests)
+        #[arg(long)]
+        content_type: Option<String>,
         /// Output format (table, json)
         #[arg(short, long, default_value = "table")]
         output: String,
@@ -163,6 +192,78 @@ enum DoctorAction {
     Check,
     /// Test R2 connection
     TestConnection,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum CorsAction {
+    /// Get CORS configuration
+    Get { name: Option<String> },
+    /// Set CORS configuration (interactive or JSON)
+    Set {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+        /// JSON file with CORS rules
+        #[arg(short, long)]
+        file: Option<String>,
+        /// Interactive mode
+        #[arg(short, long)]
+        interactive: bool,
+    },
+    /// Delete CORS configuration
+    Delete {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum LifecycleAction {
+    /// Get lifecycle rules
+    Get { name: Option<String> },
+    /// Set lifecycle rules (interactive or JSON)
+    Set {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+        /// JSON file with lifecycle rules
+        #[arg(short, long)]
+        file: Option<String>,
+        /// Interactive mode
+        #[arg(short, long)]
+        interactive: bool,
+    },
+    /// Delete lifecycle rules
+    Delete {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum WebsiteAction {
+    /// Enable static hosting
+    Enable {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+        /// Index document
+        #[arg(long)]
+        index: Option<String>,
+        /// Error document
+        #[arg(long)]
+        error: Option<String>,
+    },
+    /// Disable static hosting
+    Disable {
+        /// Bucket name
+        #[arg(short, long)]
+        bucket: Option<String>,
+    },
+    /// Get website configuration
+    Get { name: Option<String> },
 }
 
 #[tokio::main]
@@ -205,19 +306,20 @@ async fn main() -> Result<()> {
             handlers::handle_buckets(action_str, name.as_deref()).await
         }
         Commands::Files { action } => {
-            let (action_str, file, key, bucket, prefix, progress) = match action {
-                FileAction::Upload { file, key, bucket, progress } => ("upload", Some(file), Some(key), bucket, None, progress),
-                FileAction::Download { key, dest, bucket } => ("download", Some(dest), Some(key), bucket, None, false),
-                FileAction::Delete { key, bucket } => ("delete", None, Some(key), bucket, None, false),
-                FileAction::Ls { prefix, bucket } => ("ls", None, None, bucket, prefix, false),
+            let (action_str, file, key, bucket, prefix, progress, multipart) = match action {
+                FileAction::Upload { file, key, bucket, progress, multipart } => ("upload", Some(file), Some(key), bucket, None, progress, multipart),
+                FileAction::Download { key, dest, bucket } => ("download", Some(dest), Some(key), bucket, None, false, false),
+                FileAction::Delete { key, bucket } => ("delete", None, Some(key), bucket, None, false, false),
+                FileAction::Ls { prefix, bucket } => ("ls", None, None, bucket, prefix, false, false),
             };
-            handlers::handle_files(action_str, file.as_deref(), key.as_deref(), bucket.as_deref(), prefix.as_deref(), progress).await
+            handlers::handle_files(action_str, file.as_deref(), key.as_deref(), bucket.as_deref(), prefix.as_deref(), progress, multipart).await
         }
         Commands::Urls { action } => {
-            let (action_str, key, expires, output) = match action {
-                UrlAction::Generate { key, expires, output } => ("generate", Some(key), expires, output),
+            let (action_str, key, method, expires, content_type_string, output) = match action {
+                UrlAction::Generate { key, method, expires, content_type, output } => ("generate", Some(key), method, expires, content_type, output),
             };
-            handlers::handle_urls(action_str, key.as_deref(), expires, &output).await
+            let content_type_ref = content_type_string.as_deref();
+            handlers::handle_urls(action_str, key.as_deref(), &method, expires, content_type_ref, &output).await
         }
         Commands::Completion { shell } => {
             handlers::handle_completion(&shell, &mut Cli::command()).await
@@ -228,6 +330,30 @@ async fn main() -> Result<()> {
                 DoctorAction::TestConnection => "test-connection",
             };
             handlers::handle_doctor(action_str).await
+        }
+        Commands::Cors { action } => {
+            let (action_str, bucket, file, interactive) = match action {
+                CorsAction::Get { name } => ("get", name, None, false),
+                CorsAction::Set { bucket, file, interactive } => ("set", bucket, file, interactive),
+                CorsAction::Delete { bucket } => ("delete", bucket, None, false),
+            };
+            handlers::handle_cors(action_str, bucket.as_deref(), file.as_deref(), interactive).await
+        }
+        Commands::Lifecycle { action } => {
+            let (action_str, bucket, file, interactive) = match action {
+                LifecycleAction::Get { name } => ("get", name, None, false),
+                LifecycleAction::Set { bucket, file, interactive } => ("set", bucket, file, interactive),
+                LifecycleAction::Delete { bucket } => ("delete", bucket, None, false),
+            };
+            handlers::handle_lifecycle(action_str, bucket.as_deref(), file.as_deref(), interactive).await
+        }
+        Commands::Website { action } => {
+            let (action_str, bucket, index, error) = match action {
+                WebsiteAction::Enable { bucket, index, error } => ("enable", bucket, index, error),
+                WebsiteAction::Disable { bucket } => ("disable", bucket, None, None),
+                WebsiteAction::Get { name } => ("get", name, None, None),
+            };
+            handlers::handle_website(action_str, bucket.as_deref(), index.as_deref(), error.as_deref()).await
         }
     }
 }

@@ -51,8 +51,11 @@ r2pilot urls generate path/to/file.mp4 --expires 7200
 | `config` | Gestion de la configuration |
 | `tokens` | Gestion des API tokens Cloudflare |
 | `buckets` | Gestion des buckets R2 |
-| `files` | Gestion des fichiers |
-| `urls` | Génération d'URLs signées |
+| `files` | Gestion des fichiers (upload, download, delete, ls) |
+| `urls` | Génération d'URLs signées (GET, PUT, DELETE) |
+| `cors` | Gestion CORS (interactive ou JSON) |
+| `lifecycle` | Règles de cycle de vie (interactive ou JSON) |
+| `website` | Hébergement statique (public bucket) |
 | `completion` | Shell completion |
 | `doctor` | Diagnostic et vérification |
 
@@ -81,8 +84,11 @@ Pour une documentation complète, consultez :
 ## Exemples d'utilisation
 
 ```bash
-# Uploader avec barre de progression
+# Uploader un fichier (avec barre de progression)
 r2pilot files upload video.mp4 videos/jan.mp4 --progress
+
+# Uploader un gros fichier en multipart (automatique >100MB)
+r2pilot files upload largefile.iso backups/large.iso --progress
 
 # Télécharger un fichier
 r2pilot files download videos/jan.mp4 video.mp4
@@ -90,8 +96,38 @@ r2pilot files download videos/jan.mp4 video.mp4
 # Lister les fichiers d'un bucket
 r2pilot buckets ls my-bucket
 
-# Générer un lien partageable (1 heure)
+# Générer une URL signée (GET, par défaut 2h)
 r2pilot urls generate videos/jan.mp4 --expires 3600
+
+# Générer une URL signée pour upload (PUT)
+r2pilot urls generate videos/new.mp4 --method put --expires 3600 --content-type video/mp4
+
+# Générer une URL signée pour suppression (DELETE)
+r2pilot urls generate videos/old.mp4 --method delete --expires 3600
+
+# Configurer CORS (mode interactif)
+r2pilot cors set --interactive
+
+# Configurer CORS (fichier JSON)
+r2pilot cors set --file cors.json
+
+# Voir la configuration CORS
+r2pilot cors get
+
+# Supprimer la configuration CORS
+r2pilot cors delete
+
+# Configurer les règles de cycle de vie (mode interactif)
+r2pilot lifecycle set --interactive
+
+# Activer l'hébergement statique (public bucket)
+r2pilot website enable --index index.html --error 404.html
+
+# Voir la configuration website
+r2pilot website get
+
+# Désactiver l'hébergement statique
+r2pilot website disable
 ```
 
 ## License

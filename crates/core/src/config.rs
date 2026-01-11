@@ -64,6 +64,21 @@ pub struct AdvancedConfig {
     pub retry_delay: u64,
     #[serde(default = "default_max_concurrent")]
     pub max_concurrent_uploads: usize,
+    /// Multipart upload chunk size in MB (default: 100)
+    #[serde(default = "default_multipart_chunk_size")]
+    pub multipart_chunk_size_mb: usize,
+}
+
+impl Default for AdvancedConfig {
+    fn default() -> Self {
+        Self {
+            timeout: default_timeout(),
+            max_retries: default_max_retries(),
+            retry_delay: default_retry_delay(),
+            max_concurrent_uploads: default_max_concurrent(),
+            multipart_chunk_size_mb: default_multipart_chunk_size(),
+        }
+    }
 }
 
 /// Logging configuration
@@ -109,6 +124,10 @@ fn default_retry_delay() -> u64 {
 
 fn default_max_concurrent() -> usize {
     5
+}
+
+fn default_multipart_chunk_size() -> usize {
+    100 // 100MB
 }
 
 fn default_log_level() -> String {

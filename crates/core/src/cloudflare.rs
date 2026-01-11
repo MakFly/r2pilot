@@ -137,6 +137,165 @@ impl CloudflareClient {
         Ok(())
     }
 
+    // === CORS Configuration ===
+
+    /// Get CORS configuration for a bucket
+    pub async fn get_bucket_cors(&self, bucket_name: &str) -> Result<BucketCorsConfig> {
+        let response = self
+            .http_client
+            .get(&format!(
+                "{}/accounts/{}/r2/buckets/{}/cors",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response(response).await
+    }
+
+    /// Set CORS configuration for a bucket
+    pub async fn put_bucket_cors(&self, bucket_name: &str, config: &BucketCorsConfig) -> Result<()> {
+        let response = self
+            .http_client
+            .put(&format!(
+                "{}/accounts/{}/r2/buckets/{}/cors",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .json(config)
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
+    /// Delete CORS configuration for a bucket
+    pub async fn delete_bucket_cors(&self, bucket_name: &str) -> Result<()> {
+        let response = self
+            .http_client
+            .delete(&format!(
+                "{}/accounts/{}/r2/buckets/{}/cors",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
+    // === Lifecycle Rules ===
+
+    /// Get lifecycle rules for a bucket
+    pub async fn get_bucket_lifecycle(&self, bucket_name: &str) -> Result<LifecycleConfiguration> {
+        let response = self
+            .http_client
+            .get(&format!(
+                "{}/accounts/{}/r2/buckets/{}/lifecycle",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response(response).await
+    }
+
+    /// Set lifecycle rules for a bucket
+    pub async fn put_bucket_lifecycle(&self, bucket_name: &str, config: &LifecycleConfiguration) -> Result<()> {
+        let response = self
+            .http_client
+            .put(&format!(
+                "{}/accounts/{}/r2/buckets/{}/lifecycle",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .json(config)
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
+    /// Delete lifecycle rules for a bucket
+    pub async fn delete_bucket_lifecycle(&self, bucket_name: &str) -> Result<()> {
+        let response = self
+            .http_client
+            .delete(&format!(
+                "{}/accounts/{}/r2/buckets/{}/lifecycle",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
+    // === Public Bucket / Website Configuration ===
+
+    /// Enable static hosting for a bucket
+    pub async fn put_bucket_website(&self, bucket_name: &str, config: &WebsiteConfiguration) -> Result<()> {
+        let response = self
+            .http_client
+            .put(&format!(
+                "{}/accounts/{}/r2/buckets/{}/website",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .json(config)
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
+    /// Get website configuration for a bucket
+    pub async fn get_bucket_website(&self, bucket_name: &str) -> Result<WebsiteConfiguration> {
+        let response = self
+            .http_client
+            .get(&format!(
+                "{}/accounts/{}/r2/buckets/{}/website",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response(response).await
+    }
+
+    /// Disable static hosting for a bucket
+    pub async fn delete_bucket_website(&self, bucket_name: &str) -> Result<()> {
+        let response = self
+            .http_client
+            .delete(&format!(
+                "{}/accounts/{}/r2/buckets/{}/website",
+                self.base_url, self.account_id, bucket_name
+            ))
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .send()
+            .await?;
+
+        self.handle_response::<()>(response).await?;
+        Ok(())
+    }
+
     /// Handle API response
     async fn handle_response<T: for<'de> Deserialize<'de>>(&self, response: Response) -> Result<T> {
         let status = response.status();
@@ -286,6 +445,83 @@ pub struct R2Bucket {
     pub name: String,
     pub location: String,
     pub creation_date: String,
+}
+
+// === CORS Configuration Types ===
+
+/// CORS configuration for a bucket
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BucketCorsConfig {
+    pub rules: Vec<CorsRule>,
+}
+
+/// CORS rule
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorsRule {
+    #[serde(rename = "allowedOrigins")]
+    pub allowed_origins: Vec<String>,
+    #[serde(rename = "allowedMethods")]
+    pub allowed_methods: Vec<String>,
+    #[serde(rename = "allowedHeaders")]
+    pub allowed_headers: Option<Vec<String>>,
+    #[serde(rename = "maxAgeSeconds")]
+    pub max_age_seconds: Option<u64>,
+}
+
+// === Lifecycle Configuration Types ===
+
+/// Lifecycle configuration for a bucket
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleConfiguration {
+    pub rules: Vec<LifecycleRule>,
+}
+
+/// Lifecycle rule
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LifecycleRule {
+    pub id: String,
+    pub filter: LifecycleFilter,
+    pub status: String, // "Enabled" or "Disabled"
+    pub expiration: Option<LifecycleExpiration>,
+}
+
+/// Lifecycle filter
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LifecycleFilter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+}
+
+/// Lifecycle expiration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LifecycleExpiration {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub days: Option<u32>,
+}
+
+// === Website Configuration Types ===
+
+/// Website configuration for static hosting
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WebsiteConfiguration {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index_document: Option<IndexDocument>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_document: Option<ErrorDocument>,
+}
+
+/// Index document configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexDocument {
+    pub suffix: String,
+}
+
+/// Error document configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorDocument {
+    pub key: String,
 }
 
 /// Builder for creating R2 tokens with edit permissions

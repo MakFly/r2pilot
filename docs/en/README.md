@@ -17,8 +17,11 @@
 ### Features
 
 - **Bucket Management**: List, create, delete buckets
-- **File Operations**: Upload, download, delete files
-- **Signed URLs**: Generate presigned URLs for temporary access
+- **File Operations**: Upload, download, delete files with automatic multipart support
+- **Signed URLs**: Generate presigned URLs for GET, PUT, DELETE
+- **CORS**: CORS configuration (interactive or JSON)
+- **Lifecycle Rules**: Lifecycle rules for automatic deletion
+- **Website/Hosting**: Static hosting configuration (public bucket)
 - **Interactive Setup**: Guided configuration wizard
 - **Multiple Authentication**: Support for API Tokens and Access Keys
 
@@ -161,6 +164,12 @@ Manage files in R2.
 # Upload a file
 r2pilot files upload local-file.txt path/to/remote.txt --bucket my-bucket --progress
 
+# Upload large file with multipart (automatic >100MB)
+r2pilot files upload largefile.iso backups/large.iso --progress
+
+# Force multipart upload
+r2pilot files upload file.txt path/to/file.txt --multipart
+
 # Download a file
 r2pilot files download path/to/remote.txt local-file.txt --bucket my-bucket
 
@@ -176,8 +185,11 @@ r2pilot files ls --prefix path/to/
 Generate signed URLs.
 
 ```bash
-# Generate a signed URL (default: 2 hours)
+# Generate a signed GET URL (default: 2 hours)
 r2pilot urls generate path/to/file.txt
+
+# Custom method (GET, PUT, DELETE)
+r2pilot urls generate path/to/file.txt --method put --expires 3600 --content-type video/mp4
 
 # Custom expiration (in seconds)
 r2pilot urls generate path/to/file.txt --expires 3600
@@ -185,6 +197,92 @@ r2pilot urls generate path/to/file.txt --expires 3600
 # JSON output
 r2pilot urls generate path/to/file.txt --output json
 ```
+
+### cors
+
+Manage bucket CORS configuration.
+
+```bash
+# View CORS configuration
+r2pilot cors get
+
+# Configure CORS in interactive mode
+r2pilot cors set --interactive
+
+# Configure CORS via JSON file
+r2pilot cors set --file cors.json
+
+# Delete CORS configuration
+r2pilot cors delete
+```
+
+**Example CORS JSON file:**
+```json
+{
+  "rules": [
+    {
+      "allowedOrigins": ["https://example.com", "https://app.example.com"],
+      "allowedMethods": ["GET", "PUT", "DELETE", "HEAD"],
+      "allowedHeaders": ["*"],
+      "maxAgeSeconds": 86400
+    }
+  ]
+}
+```
+
+### lifecycle
+
+Manage object lifecycle rules.
+
+```bash
+# View lifecycle rules
+r2pilot lifecycle get
+
+# Configure rules in interactive mode
+r2pilot lifecycle set --interactive
+
+# Configure via JSON file
+r2pilot lifecycle set --file lifecycle.json
+
+# Delete lifecycle rules
+r2pilot lifecycle delete
+```
+
+**Example Lifecycle JSON file:**
+```json
+{
+  "rules": [
+    {
+      "id": "delete-old-videos",
+      "filter": {
+        "prefix": "videos/"
+      },
+      "status": "Enabled",
+      "expiration": {
+        "days": 30
+      }
+    }
+  ]
+}
+```
+
+### website
+
+Manage static hosting (public bucket).
+
+```bash
+# Enable static hosting
+r2pilot website enable --index index.html --error 404.html
+
+# View website configuration
+r2pilot website get
+
+# Disable static hosting
+r2pilot website disable
+```
+
+**Note:** Once enabled, your bucket will be publicly accessible at:
+`https://<bucket_name>.<account_id>.r2.cloudflarestorage.com/<file_path>`
 
 ### completion
 
@@ -233,6 +331,9 @@ r2pilot files upload video.mp4 raw/video-2024-01.mp4 --progress
 
 # Upload to specific bucket
 r2pilot files upload video.mp4 videos/january.mp4 --bucket my-videos
+
+# Upload large file (>100MB) with automatic multipart
+r2pilot files upload largefile.iso backups/large.iso --progress
 ```
 
 ### Generate Shareable Link
@@ -244,8 +345,51 @@ r2pilot urls generate videos/january.mp4
 # Generate link valid for 1 hour
 r2pilot urls generate videos/january.mp4 --expires 3600
 
+# Generate a PUT URL for direct browser upload
+r2pilot urls generate uploads/video.mp4 --method put --expires 3600 --content-type video/mp4
+
 # Get JSON output for scripts
 r2pilot urls generate videos/january.mp4 --output json
+```
+
+### Configure CORS for a Web Application
+
+```bash
+# Interactive mode
+r2pilot cors set --interactive
+
+# Via JSON file
+r2pilot cors set --file cors.json
+
+# Verify configuration
+r2pilot cors get
+```
+
+### Configure Automatic Deletion (Lifecycle)
+
+```bash
+# Interactive mode - delete videos older than 30 days
+r2pilot lifecycle set --interactive
+
+# Via JSON file
+r2pilot lifecycle set --file lifecycle.json
+
+# Verify rules
+r2pilot lifecycle get
+```
+
+### Host a Static Website
+
+```bash
+# Enable static hosting
+r2pilot website enable --index index.html --error 404.html
+
+# Upload your website files
+r2pilot files upload index.html index.html
+r2pilot files upload styles.css styles.css
+
+# Your site is now live!
+# URL: https://<bucket>.<account_id>.r2.cloudflarestorage.com/index.html
 ```
 
 ### List and Manage Buckets

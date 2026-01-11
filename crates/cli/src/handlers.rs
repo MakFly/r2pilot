@@ -7,6 +7,8 @@ use anyhow::Result;
 use r2pilot_core::{
     R2Client,
     load_config, validate_config, get_config_path,
+    MultipartUploadConfig, PresignedMethod, PresignedUrlConfig,
+    generate_presigned_url,
 };
 use tabled::{Table, Tabled};
 use std::path::Path;
@@ -409,6 +411,7 @@ pub async fn handle_files(
     bucket: Option<&str>,
     prefix: Option<&str>,
     _progress: bool,
+    multipart: bool,
 ) -> Result<()> {
     let config = load_config()?;
 
@@ -456,7 +459,22 @@ pub async fn handle_files(
                 .first_or_octet_stream()
                 .to_string();
 
-            r2_client.upload_file(key, path, &content_type).await?;
+            // Check if multipart upload is needed or requested
+            let use_multipart = multipart || r2pilot_core::requires_multipart_upload(file_size);
+
+            if use_multipart {
+                println!("  Using multipart upload...");
+
+                let advanced = config.advanced.unwrap_or_default();
+                let multipart_config = MultipartUploadConfig {
+                    chunk_size: advanced.multipart_chunk_size_mb * 1024 * 1024,
+                    concurrent_parts: advanced.max_concurrent_uploads,
+                };
+
+                r2_client.upload_file_multipart(key, path, &content_type, multipart_config).await?;
+            } else {
+                r2_client.upload_file(key, path, &content_type).await?;
+            }
 
             println!("  ✅ Upload complete");
 
@@ -515,7 +533,14 @@ pub async fn handle_files(
 }
 
 /// Handle URLs commands
-pub async fn handle_urls(action: &str, key: Option<&str>, expires: u64, output: &str) -> Result<()> {
+pub async fn handle_urls(
+    action: &str,
+    key: Option<&str>,
+    method: &str,
+    expires: u64,
+    content_type: Option<&str>,
+    output: &str,
+) -> Result<()> {
     if action != "generate" {
         println!("Unknown action: {}", action);
         println!("Available actions: generate");
@@ -525,34 +550,35 @@ pub async fn handle_urls(action: &str, key: Option<&str>, expires: u64, output: 
     let key = key.ok_or_else(|| anyhow::anyhow!("R2 key required"))?;
     let config = load_config()?;
 
-    // Get R2 credentials
-    let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
-        return Err(anyhow::anyhow!(
-            "API Token not supported yet.\n\
-             Use Access Keys in your configuration.\n\
-             Get your Access Keys from: https://dash.cloudflare.com/{}/r2/api-tokens",
-            config.cloudflare.account_id
-        ));
-    } else {
-        (
-            config.cloudflare.access_key_id.clone().unwrap(),
-            config.cloudflare.secret_access_key.clone().unwrap(),
-        )
+    // Parse method
+    let presigned_method = match method.to_lowercase().as_str() {
+        "get" => PresignedMethod::Get,
+        "put" => PresignedMethod::Put,
+        "delete" => PresignedMethod::Delete,
+        _ => return Err(anyhow::anyhow!("Invalid method: {}. Valid methods: get, put, delete", method)),
     };
 
-    let r2_client = R2Client::new(
-        config.cloudflare.endpoint.clone(),
-        access_key_id,
-        secret_access_key,
-        config.r2.default_bucket.clone(),
-    ).await?;
+    println!("Generating signed URL for {} (method: {}, expires: {}s)...", key, presigned_method, expires);
 
-    println!("Generating signed URL for {} (expires: {}s)...", key, expires);
-
-    let url = r2_client.generate_presigned_url(
-        key,
+    // Build presigned URL config
+    let mut presigned_config = PresignedUrlConfig::new(
+        presigned_method,
+        key.to_string(),
         std::time::Duration::from_secs(expires),
-    ).await?;
+    );
+
+    // Set content type if provided (for PUT requests)
+    if let Some(ct) = content_type {
+        presigned_config = presigned_config.with_content_type(ct.to_string());
+    }
+
+    // Generate presigned URL using the presigned module
+    let url = generate_presigned_url(
+        &config.cloudflare.endpoint,
+        &config.r2.default_bucket,
+        key,
+        presigned_config,
+    )?;
 
     match output {
         "json" => {
@@ -724,4 +750,225 @@ pub async fn handle_completion(shell: &str, cmd: &mut Command) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Handle CORS commands
+pub async fn handle_cors(action: &str, bucket: Option<&str>, file: Option<&str>, interactive: bool) -> Result<()> {
+    use r2pilot_core::CloudflareClient;
+    use crate::cors_wizard;
+
+    let config = load_config()?;
+
+    // Get API token for Cloudflare API access
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+        "API Token required for CORS management.\n\
+         Add 'api_token' to your configuration.\n\
+         Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
+    ))?;
+
+    let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+    let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
+
+    match action {
+        "get" => {
+            println!("Getting CORS configuration for '{}'...", bucket_name);
+
+            let cors_config = cf_client.get_bucket_cors(bucket_name).await?;
+
+            println!();
+            println!("CORS Rules:");
+            for (i, rule) in cors_config.rules.iter().enumerate() {
+                println!("  Rule {}:", i + 1);
+                println!("    Allowed Origins: {:?}", rule.allowed_origins);
+                println!("    Allowed Methods: {:?}", rule.allowed_methods);
+                println!("    Allowed Headers: {:?}", rule.allowed_headers);
+                println!("    Max Age: {:?}", rule.max_age_seconds);
+            }
+
+            Ok(())
+        }
+        "set" => {
+            let cors_config = if interactive {
+                cors_wizard::run_cors_wizard().await?
+            } else if let Some(file_path) = file {
+                cors_wizard::load_cors_from_file(file_path).await?
+            } else {
+                return Err(anyhow::anyhow!("Either --interactive or --file must be specified"));
+            };
+
+            println!("Setting CORS configuration for '{}'...", bucket_name);
+
+            cf_client.put_bucket_cors(bucket_name, &cors_config).await?;
+
+            println!("  ✅ CORS configuration set");
+
+            Ok(())
+        }
+        "delete" => {
+            println!("Deleting CORS configuration for '{}'...", bucket_name);
+
+            cf_client.delete_bucket_cors(bucket_name).await?;
+
+            println!("  ✅ CORS configuration deleted");
+
+            Ok(())
+        }
+        _ => {
+            println!("Unknown action: {}", action);
+            println!("Available actions: get, set, delete");
+            Ok(())
+        }
+    }
+}
+
+/// Handle Lifecycle commands
+pub async fn handle_lifecycle(action: &str, bucket: Option<&str>, file: Option<&str>, interactive: bool) -> Result<()> {
+    use r2pilot_core::CloudflareClient;
+    use crate::lifecycle_wizard;
+
+    let config = load_config()?;
+
+    // Get API token for Cloudflare API access
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+        "API Token required for Lifecycle management.\n\
+         Add 'api_token' to your configuration.\n\
+         Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
+    ))?;
+
+    let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+    let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
+
+    match action {
+        "get" => {
+            println!("Getting Lifecycle rules for '{}'...", bucket_name);
+
+            let lifecycle_config = cf_client.get_bucket_lifecycle(bucket_name).await?;
+
+            println!();
+            println!("Lifecycle Rules:");
+            for (i, rule) in lifecycle_config.rules.iter().enumerate() {
+                println!("  Rule {} ({})", i + 1, rule.id);
+                println!("    Status: {}", rule.status);
+                if let Some(prefix) = &rule.filter.prefix {
+                    println!("    Filter Prefix: {}", prefix);
+                }
+                if let Some(expiration) = &rule.expiration {
+                    println!("    Expiration: {} days", expiration.days.as_ref().unwrap_or(&0));
+                }
+            }
+
+            Ok(())
+        }
+        "set" => {
+            let lifecycle_config = if interactive {
+                lifecycle_wizard::run_lifecycle_wizard().await?
+            } else if let Some(file_path) = file {
+                lifecycle_wizard::load_lifecycle_from_file(file_path).await?
+            } else {
+                return Err(anyhow::anyhow!("Either --interactive or --file must be specified"));
+            };
+
+            println!("Setting Lifecycle rules for '{}'...", bucket_name);
+
+            cf_client.put_bucket_lifecycle(bucket_name, &lifecycle_config).await?;
+
+            println!("  ✅ Lifecycle rules set");
+            println!("  Note: Rules may take time to apply");
+
+            Ok(())
+        }
+        "delete" => {
+            println!("Deleting Lifecycle rules for '{}'...", bucket_name);
+
+            cf_client.delete_bucket_lifecycle(bucket_name).await?;
+
+            println!("  ✅ Lifecycle rules deleted");
+
+            Ok(())
+        }
+        _ => {
+            println!("Unknown action: {}", action);
+            println!("Available actions: get, set, delete");
+            Ok(())
+        }
+    }
+}
+
+/// Handle Website commands
+pub async fn handle_website(action: &str, bucket: Option<&str>, index: Option<&str>, error: Option<&str>) -> Result<()> {
+    use r2pilot_core::{CloudflareClient, WebsiteConfiguration, IndexDocument, ErrorDocument};
+
+    let config = load_config()?;
+
+    // Get API token for Cloudflare API access
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
+        "API Token required for Website management.\n\
+         Add 'api_token' to your configuration.\n\
+         Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
+    ))?;
+
+    let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
+    let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
+
+    match action {
+        "enable" => {
+            let index_suffix = index.unwrap_or("index.html");
+            let error_key = error.unwrap_or("404.html");
+
+            println!("Enabling static hosting for '{}'...", bucket_name);
+
+            let website_config = WebsiteConfiguration {
+                index_document: Some(IndexDocument {
+                    suffix: index_suffix.to_string(),
+                }),
+                error_document: Some(ErrorDocument {
+                    key: error_key.to_string(),
+                }),
+            };
+
+            cf_client.put_bucket_website(bucket_name, &website_config).await?;
+
+            println!("  ✅ Static hosting enabled");
+            println!();
+            println!("  Your bucket is now publicly accessible at:");
+            println!("  https://{}.{}", bucket_name, config.cloudflare.account_id);
+            println!();
+            println!("  Index document: {}", index_suffix);
+            println!("  Error document: {}", error_key);
+
+            Ok(())
+        }
+        "disable" => {
+            println!("Disabling static hosting for '{}'...", bucket_name);
+
+            cf_client.delete_bucket_website(bucket_name).await?;
+
+            println!("  ✅ Static hosting disabled");
+
+            Ok(())
+        }
+        "get" => {
+            println!("Getting website configuration for '{}'...", bucket_name);
+
+            let website_config = cf_client.get_bucket_website(bucket_name).await?;
+
+            println!();
+            println!("Website Configuration:");
+            if let Some(index) = &website_config.index_document {
+                println!("  Index Document: {}", index.suffix);
+            }
+            if let Some(error) = &website_config.error_document {
+                println!("  Error Document: {}", error.key);
+            }
+            println!();
+            println!("  Public URL: https://{}.{}", bucket_name, config.cloudflare.account_id);
+
+            Ok(())
+        }
+        _ => {
+            println!("Unknown action: {}", action);
+            println!("Available actions: enable, disable, get");
+            Ok(())
+        }
+    }
 }

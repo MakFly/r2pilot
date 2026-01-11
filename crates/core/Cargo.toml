@@ -24,6 +24,10 @@ aws-sdk-s3.workspace = true
 aws-smithy-types.workspace = true
 http.workspace = true
 
+# Additional dependencies for multipart upload
+futures.workspace = true
+tokio-util.workspace = true
+
 # OpenSSL with vendored feature (compile from source)
 openssl-sys = { version = "0.9", features = ["vendored"] }
 

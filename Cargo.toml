@@ -19,12 +19,16 @@ console = "0.15"
 aws-config = { version = "1.5", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.55"
 aws-smithy-types = "1.2"
+aws-credential-types = "1.2"
+aws-sigv4 = "1.2"
 http = "1.2"
 
 # HTTP & API
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 async-trait = "0.1"
+futures = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

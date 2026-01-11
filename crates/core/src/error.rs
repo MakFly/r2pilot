@@ -84,6 +84,26 @@ pub enum Error {
     /// Generic error with message
     #[error("{0}")]
     Other(String),
+
+    /// Multipart upload error
+    #[error("Multipart upload error: {0}")]
+    MultipartUpload(String),
+
+    /// Presigned URL configuration error
+    #[error("Invalid presigned URL configuration: {0}")]
+    PresignedUrlConfig(String),
+
+    /// CORS configuration error
+    #[error("CORS configuration error: {0}")]
+    CorsConfig(String),
+
+    /// Lifecycle rule error
+    #[error("Lifecycle rule error: {0}")]
+    LifecycleRule(String),
+
+    /// Bucket settings error
+    #[error("Bucket settings error: {0}")]
+    BucketSettings(String),
 }
 
 impl From<reqwest::Error> for Error {
