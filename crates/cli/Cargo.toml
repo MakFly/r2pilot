@@ -24,6 +24,9 @@ color-eyre.workspace = true
 
 # Output
 tabled.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+mime_guess.workspace = true
 
 # Logging
 tracing.workspace = true

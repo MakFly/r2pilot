@@ -2,8 +2,8 @@ use anyhow::Result;
 use clap::Parser;
 use clap_complete::Shell as ClapShell;
 use color_eyre::config::HookBuilder;
-use std::str::FromStr;
 
+mod handlers;
 mod wizard;
 
 /// r2pilot - CLI pour gérer Cloudflare R2
@@ -178,14 +178,48 @@ async fn main() -> Result<()> {
 
     // Execute command
     match cli.command {
-        Commands::Init => {
-            wizard::run_init_wizard().await
+        Commands::Init => handlers::handle_init().await,
+        Commands::Config { action } => {
+            let action_str = match action {
+                ConfigAction::Show => "show",
+                ConfigAction::Edit => "edit",
+                ConfigAction::Validate => "validate",
+            };
+            handlers::handle_config(action_str).await
         }
-        Commands::Config { action } => handle_config(action).await,
-        Commands::Tokens { action } => handle_tokens(action).await,
-        Commands::Buckets { action } => handle_buckets(action).await,
-        Commands::Files { action } => handle_files(action).await,
-        Commands::Urls { action } => handle_urls(action).await,
+        Commands::Tokens { action } => {
+            let (action_str, token_id) = match action {
+                TokenAction::List => ("list", None),
+                TokenAction::Create => ("create", None),
+                TokenAction::Revoke { token_id } => ("revoke", Some(token_id)),
+            };
+            handlers::handle_tokens(action_str, token_id.as_deref()).await
+        }
+        Commands::Buckets { action } => {
+            let (action_str, name) = match action {
+                BucketAction::List => ("list", None),
+                BucketAction::Create { name } => ("create", Some(name)),
+                BucketAction::Delete { name } => ("delete", Some(name)),
+                BucketAction::Info { name } => ("info", Some(name)),
+                BucketAction::Ls { name } => ("ls", name),
+            };
+            handlers::handle_buckets(action_str, name.as_deref()).await
+        }
+        Commands::Files { action } => {
+            let (action_str, file, key, bucket, prefix, progress) = match action {
+                FileAction::Upload { file, key, bucket, progress } => ("upload", Some(file), Some(key), bucket, None, progress),
+                FileAction::Download { key, dest, bucket } => ("download", Some(dest), Some(key), bucket, None, false),
+                FileAction::Delete { key, bucket } => ("delete", None, Some(key), bucket, None, false),
+                FileAction::Ls { prefix, bucket } => ("ls", None, None, bucket, prefix, false),
+            };
+            handlers::handle_files(action_str, file.as_deref(), key.as_deref(), bucket.as_deref(), prefix.as_deref(), progress).await
+        }
+        Commands::Urls { action } => {
+            let (action_str, key, expires, output) = match action {
+                UrlAction::Generate { key, expires, output } => ("generate", Some(key), expires, output),
+            };
+            handlers::handle_urls(action_str, key.as_deref(), expires, &output).await
+        }
         Commands::Completion { shell } => {
             let clap_shell = match shell.as_str() {
                 "bash" => ClapShell::Bash,
@@ -203,119 +237,12 @@ async fn main() -> Result<()> {
             // TODO: Generate completion scripts
             Ok(())
         }
-        Commands::Doctor { action } => handle_doctor(action).await,
-    }
-}
-
-async fn handle_config(action: ConfigAction) -> Result<()> {
-    match action {
-        ConfigAction::Show => {
-            println!("Configuration actuelle:");
-            // TODO: Load and display config
-            println!("  (Non configuré - lancez 'r2pilot init')");
-        }
-        ConfigAction::Edit => {
-            println!("Ouverture de l'éditeur...");
-            // TODO: Open config in $EDITOR
-        }
-        ConfigAction::Validate => {
-            println!("Validation des credentials...");
-            // TODO: Validate credentials
+        Commands::Doctor { action } => {
+            let action_str = match action {
+                DoctorAction::Check => "check",
+                DoctorAction::TestConnection => "test-connection",
+            };
+            handlers::handle_doctor(action_str).await
         }
     }
-    Ok(())
-}
-
-async fn handle_tokens(action: TokenAction) -> Result<()> {
-    match action {
-        TokenAction::List => {
-            println!("Liste des API tokens:");
-            // TODO: List tokens
-        }
-        TokenAction::Create => {
-            println!("Création d'un nouveau token...");
-            // TODO: Create token
-        }
-        TokenAction::Revoke { token_id } => {
-            println!("Révocation du token {}...", token_id);
-            // TODO: Revoke token
-        }
-    }
-    Ok(())
-}
-
-async fn handle_buckets(action: BucketAction) -> Result<()> {
-    match action {
-        BucketAction::List => {
-            println!("Liste des buckets R2:");
-            // TODO: List buckets
-        }
-        BucketAction::Create { name } => {
-            println!("Création du bucket '{}'...", name);
-            // TODO: Create bucket
-        }
-        BucketAction::Delete { name } => {
-            println!("Suppression du bucket '{}'...", name);
-            // TODO: Delete bucket
-        }
-        BucketAction::Info { name } => {
-            println!("Informations sur le bucket '{}'...", name);
-            // TODO: Get bucket info
-        }
-        BucketAction::Ls { name } => {
-            println!("Contenu du bucket {:?}...", name);
-            // TODO: List bucket contents
-        }
-    }
-    Ok(())
-}
-
-async fn handle_files(action: FileAction) -> Result<()> {
-    match action {
-        FileAction::Upload { file, key, bucket, progress } => {
-            println!("Upload de {} -> {}...", file, key);
-            if progress {
-                println!("  (avec progress bar)");
-            }
-            // TODO: Upload file
-        }
-        FileAction::Download { key, dest, bucket } => {
-            println!("Download de {} -> {}...", key, dest);
-            // TODO: Download file
-        }
-        FileAction::Delete { key, bucket } => {
-            println!("Suppression de {}...", key);
-            // TODO: Delete file
-        }
-        FileAction::Ls { prefix, bucket } => {
-            println!("Liste des fichiers (prefix: {:?})...", prefix);
-            // TODO: List files
-        }
-    }
-    Ok(())
-}
-
-async fn handle_urls(action: UrlAction) -> Result<()> {
-    match action {
-        UrlAction::Generate { key, expires, output } => {
-            println!("Génération URL signée pour {} (expires: {}s, output: {})...", key, expires, output);
-            // TODO: Generate signed URL
-        }
-    }
-    Ok(())
-}
-
-async fn handle_doctor(action: DoctorAction) -> Result<()> {
-    match action {
-        DoctorAction::Check => {
-            println!("Vérification de l'installation r2pilot...");
-            println!("  ✅ r2pilot est installé");
-            // TODO: Check config, connection, etc.
-        }
-        DoctorAction::TestConnection => {
-            println!("Test de connexion R2...");
-            // TODO: Test R2 connection
-        }
-    }
-    Ok(())
 }
