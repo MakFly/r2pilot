@@ -144,6 +144,21 @@ mod tests {
     }
 
     #[test]
+    fn test_presigned_method_format() {
+        assert_eq!(format!("{}", PresignedMethod::Get), "GET");
+        assert_eq!(format!("{}", PresignedMethod::Put), "PUT");
+        assert_eq!(format!("{}", PresignedMethod::Delete), "DELETE");
+    }
+
+    #[test]
+    fn test_presigned_method_equality() {
+        assert_eq!(PresignedMethod::Get, PresignedMethod::Get);
+        assert_ne!(PresignedMethod::Get, PresignedMethod::Put);
+        assert_eq!(PresignedMethod::Put, PresignedMethod::Put);
+        assert_ne!(PresignedMethod::Put, PresignedMethod::Delete);
+    }
+
+    #[test]
     fn test_presigned_url_config() {
         let config = PresignedUrlConfig::new(
             PresignedMethod::Put,
@@ -158,5 +173,99 @@ mod tests {
 
         let config_with_ct = config.with_content_type("text/plain".to_string());
         assert_eq!(config_with_ct.content_type, Some("text/plain".to_string()));
+    }
+
+    #[test]
+    fn test_presigned_url_config_get() {
+        let config = PresignedUrlConfig::new(
+            PresignedMethod::Get,
+            "download.zip".to_string(),
+            Duration::from_secs(7200),
+        );
+
+        assert_eq!(config.method, PresignedMethod::Get);
+        assert_eq!(config.key, "download.zip");
+        assert_eq!(config.expires_in.as_secs(), 7200);
+    }
+
+    #[test]
+    fn test_presigned_url_config_delete() {
+        let config = PresignedUrlConfig::new(
+            PresignedMethod::Delete,
+            "old-file.log".to_string(),
+            Duration::from_secs(300),
+        );
+
+        assert_eq!(config.method, PresignedMethod::Delete);
+        assert_eq!(config.key, "old-file.log");
+        assert_eq!(config.expires_in.as_secs(), 300);
+    }
+
+    #[test]
+    fn test_presigned_url_config_with_content_type() {
+        let config = PresignedUrlConfig::new(
+            PresignedMethod::Put,
+            "upload.txt".to_string(),
+            Duration::from_secs(1800),
+        );
+
+        let config_with_ct = config.with_content_type("text/plain".to_string());
+
+        assert_eq!(config_with_ct.method, PresignedMethod::Put);
+        assert_eq!(config_with_ct.key, "upload.txt");
+        assert_eq!(config_with_ct.expires_in.as_secs(), 1800);
+        assert_eq!(config_with_ct.content_type, Some("text/plain".to_string()));
+    }
+
+    #[test]
+    fn test_generate_presigned_url_get() {
+        let result = generate_presigned_get_url(
+            "https://test.r2.cloudflarestorage.com",
+            "test-bucket",
+            "file.txt",
+            Duration::from_secs(3600),
+        );
+
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.contains("https://"));
+        assert!(url.contains("test-bucket"));
+        assert!(url.contains("file.txt"));
+        assert!(url.contains("expires="));
+    }
+
+    #[test]
+    fn test_generate_presigned_url_put() {
+        let result = generate_presigned_put_url(
+            "https://test.r2.cloudflarestorage.com",
+            "test-bucket",
+            "upload.txt",
+            Duration::from_secs(1800),
+            "text/plain",
+        );
+
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.contains("https://"));
+        assert!(url.contains("test-bucket"));
+        assert!(url.contains("upload.txt"));
+        assert!(url.contains("expires="));
+    }
+
+    #[test]
+    fn test_generate_presigned_url_delete() {
+        let result = generate_presigned_delete_url(
+            "https://test.r2.cloudflarestorage.com",
+            "test-bucket",
+            "old.txt",
+            Duration::from_secs(600),
+        );
+
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.contains("https://"));
+        assert!(url.contains("test-bucket"));
+        assert!(url.contains("old.txt"));
+        assert!(url.contains("expires="));
     }
 }

@@ -142,3 +142,138 @@ impl From<aws_sdk_s3::primitives::ByteStreamError> for Error {
         Error::R2Operation(err.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_config() {
+        let error = Error::Config("Test config error".to_string());
+        assert!(error.to_string().contains("Configuration error"));
+        assert!(error.to_string().contains("Test config error"));
+    }
+
+    #[test]
+    fn test_error_config_not_found() {
+        let error = Error::ConfigNotFound(std::path::PathBuf::from("config.toml"));
+        assert!(error.to_string().contains("Configuration file not found"));
+        assert!(error.to_string().contains("config.toml"));
+    }
+
+    #[test]
+    fn test_error_invalid_config() {
+        let error = Error::InvalidConfig("Invalid TOML format".to_string());
+        assert!(error.to_string().contains("Invalid configuration format"));
+        assert!(error.to_string().contains("Invalid TOML format"));
+    }
+
+    #[test]
+    fn test_error_cloudflare_api() {
+        let error = Error::CloudflareApi("API rate limit exceeded".to_string());
+        assert!(error.to_string().contains("Cloudflare API error"));
+        assert!(error.to_string().contains("API rate limit exceeded"));
+    }
+
+    #[test]
+    fn test_error_authentication() {
+        let error = Error::Authentication("Invalid credentials".to_string());
+        assert!(error.to_string().contains("Authentication failed"));
+        assert!(error.to_string().contains("Invalid credentials"));
+    }
+
+    #[test]
+    fn test_error_r2_operation() {
+        let error = Error::R2Operation("Bucket not found".to_string());
+        assert!(error.to_string().contains("R2 operation failed"));
+        assert!(error.to_string().contains("Bucket not found"));
+    }
+
+    #[test]
+    fn test_error_network() {
+        let error = Error::Network("Connection timeout".to_string());
+        assert!(error.to_string().contains("Network error"));
+        assert!(error.to_string().contains("Connection timeout"));
+    }
+
+    #[test]
+    fn test_error_http_client() {
+        let error = Error::HttpClient("400 Bad Request".to_string());
+        assert!(error.to_string().contains("HTTP client error"));
+        assert!(error.to_string().contains("400 Bad Request"));
+    }
+
+    #[test]
+    fn test_error_not_found() {
+        let error = Error::NotFound("Resource not found".to_string());
+        assert!(error.to_string().contains("Not found"));
+        assert!(error.to_string().contains("Resource not found"));
+    }
+
+    #[test]
+    fn test_error_invalid_input() {
+        let error = Error::InvalidInput("Invalid email format".to_string());
+        assert!(error.to_string().contains("Invalid input"));
+        assert!(error.to_string().contains("Invalid email format"));
+    }
+
+    #[test]
+    fn test_error_permission_denied() {
+        let error = Error::PermissionDenied("Access denied".to_string());
+        assert!(error.to_string().contains("Permission denied"));
+        assert!(error.to_string().contains("Access denied"));
+    }
+
+    #[test]
+    fn test_error_timeout() {
+        let error = Error::Timeout;
+        assert!(error.to_string().contains("Operation timed out"));
+    }
+
+    #[test]
+    fn test_error_cancelled() {
+        let error = Error::Cancelled;
+        assert!(error.to_string().contains("Operation cancelled"));
+    }
+
+    #[test]
+    fn test_error_other() {
+        let error = Error::Other("Generic error".to_string());
+        assert_eq!(error.to_string(), "Generic error");
+    }
+
+    #[test]
+    fn test_error_multipart_upload() {
+        let error = Error::MultipartUpload("Upload failed".to_string());
+        assert!(error.to_string().contains("Multipart upload error"));
+        assert!(error.to_string().contains("Upload failed"));
+    }
+
+    #[test]
+    fn test_error_presigned_url_config() {
+        let error = Error::PresignedUrlConfig("Invalid expiration".to_string());
+        assert!(error.to_string().contains("Invalid presigned URL configuration"));
+        assert!(error.to_string().contains("Invalid expiration"));
+    }
+
+    #[test]
+    fn test_error_cors_config() {
+        let error = Error::CorsConfig("Invalid CORS rule".to_string());
+        assert!(error.to_string().contains("CORS configuration error"));
+        assert!(error.to_string().contains("Invalid CORS rule"));
+    }
+
+    #[test]
+    fn test_error_lifecycle_rule() {
+        let error = Error::LifecycleRule("Invalid rule".to_string());
+        assert!(error.to_string().contains("Lifecycle rule error"));
+        assert!(error.to_string().contains("Invalid rule"));
+    }
+
+    #[test]
+    fn test_error_bucket_settings() {
+        let error = Error::BucketSettings("Invalid settings".to_string());
+        assert!(error.to_string().contains("Bucket settings error"));
+        assert!(error.to_string().contains("Invalid settings"));
+    }
+}

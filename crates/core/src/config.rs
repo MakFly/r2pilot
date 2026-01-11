@@ -53,6 +53,16 @@ pub struct R2Config {
     pub default_expiration: u64,
 }
 
+impl Default for R2Config {
+    fn default() -> Self {
+        Self {
+            default_bucket: String::new(),
+            region: default_region(),
+            default_expiration: default_expiration(),
+        }
+    }
+}
+
 /// Advanced configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdvancedConfig {
@@ -92,6 +102,16 @@ pub struct LoggingConfig {
     pub file: Option<String>,
 }
 
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: default_log_level(),
+            format: default_log_format(),
+            file: None,
+        }
+    }
+}
+
 /// Output configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputConfig {
@@ -99,6 +119,15 @@ pub struct OutputConfig {
     pub default_format: String,
     #[serde(default = "default_color")]
     pub color: String,
+}
+
+impl Default for OutputConfig {
+    fn default() -> Self {
+        Self {
+            default_format: default_output_format(),
+            color: default_color(),
+        }
+    }
 }
 
 // Default values
@@ -331,5 +360,83 @@ mod tests {
         let mut config = make_valid_config();
         config.r2.default_expiration = 604800; // Exactly 7 days
         assert!(validate_config(&config).is_ok());
+    }
+
+    #[test]
+    fn test_advanced_config_default() {
+        let config = AdvancedConfig::default();
+
+        assert_eq!(config.timeout, 30);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, 1000);
+        assert_eq!(config.max_concurrent_uploads, 5);
+        assert_eq!(config.multipart_chunk_size_mb, 100);
+    }
+
+    #[test]
+    fn test_advanced_config_custom() {
+        let config = AdvancedConfig {
+            timeout: 60,
+            max_retries: 5,
+            retry_delay: 2000,
+            max_concurrent_uploads: 10,
+            multipart_chunk_size_mb: 200,
+        };
+
+        assert_eq!(config.timeout, 60);
+        assert_eq!(config.max_retries, 5);
+        assert_eq!(config.retry_delay, 2000);
+        assert_eq!(config.max_concurrent_uploads, 10);
+        assert_eq!(config.multipart_chunk_size_mb, 200);
+    }
+
+    #[test]
+    fn test_logging_config_default() {
+        let config = LoggingConfig::default();
+
+        assert_eq!(config.level, "info".to_string());
+        assert_eq!(config.format, "pretty".to_string());
+    }
+
+    #[test]
+    fn test_output_config_default() {
+        let config = OutputConfig::default();
+
+        assert_eq!(config.default_format, "table".to_string());
+        assert_eq!(config.color, "auto".to_string());
+    }
+
+    #[test]
+    fn test_r2_config_default() {
+        let config = R2Config::default();
+
+        assert_eq!(config.default_bucket, "");
+        assert_eq!(config.region, "auto");
+        assert_eq!(config.default_expiration, 7200);
+    }
+
+    #[test]
+    fn test_config_file_with_advanced_options() {
+        let config = ConfigFile {
+            cloudflare: CloudflareConfig {
+                account_id: "test-account".to_string(),
+                endpoint: "https://api.cloudflare.com".to_string(),
+                api_token: Some("test-token".to_string()),
+                access_key_id: None,
+                secret_access_key: None,
+            },
+            r2: R2Config {
+                default_bucket: "test-bucket".to_string(),
+                region: "auto".to_string(),
+                default_expiration: 3600,
+            },
+            advanced: Some(AdvancedConfig::default()),
+            logging: Some(LoggingConfig::default()),
+            output: Some(OutputConfig::default()),
+        };
+
+        assert!(config.advanced.is_some());
+        assert!(config.logging.is_some());
+        assert!(config.output.is_some());
     }
 }

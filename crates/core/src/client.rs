@@ -507,4 +507,65 @@ mod tests {
         assert_eq!(info.key, "test/file.txt");
         assert_eq!(info.size, 1024);
     }
+
+    #[test]
+    fn test_requires_multipart_upload() {
+        // Test with small file (should not require multipart)
+        assert!(!requires_multipart_upload(10 * 1024 * 1024)); // 10MB < 100MB
+        assert!(!requires_multipart_upload(99 * 1024 * 1024)); // 99MB < 100MB
+
+        // Test with large file (should require multipart)
+        assert!(requires_multipart_upload(101 * 1024 * 1024)); // 101MB > 100MB
+        assert!(requires_multipart_upload(500 * 1024 * 1024)); // 500MB > 100MB
+        assert!(requires_multipart_upload(1024 * 1024 * 1024)); // 1GB > 100MB
+    }
+
+    #[test]
+    fn test_multipart_upload_config_default() {
+        let config = MultipartUploadConfig::default();
+        assert_eq!(config.chunk_size, 100 * 1024 * 1024); // 100MB
+        assert_eq!(config.concurrent_parts, 5);
+    }
+
+    #[test]
+    fn test_multipart_upload_config_custom() {
+        let config = MultipartUploadConfig {
+            chunk_size: 50 * 1024 * 1024, // 50MB
+            concurrent_parts: 3,
+        };
+        assert_eq!(config.chunk_size, 50 * 1024 * 1024);
+        assert_eq!(config.concurrent_parts, 3);
+    }
+
+    #[test]
+    fn test_multipart_upload_progress() {
+        let progress = MultipartUploadProgress {
+            upload_id: "test-upload-id".to_string(),
+            total_bytes: 1024 * 1024, // 1MB
+            uploaded_bytes: 512 * 1024, // 512KB
+            completed_parts: 2,
+            total_parts: 4,
+        };
+
+        assert_eq!(progress.upload_id, "test-upload-id");
+        assert_eq!(progress.total_bytes, 1024 * 1024);
+        assert_eq!(progress.uploaded_bytes, 512 * 1024);
+        assert_eq!(progress.completed_parts, 2);
+        assert_eq!(progress.total_parts, 4);
+
+        // Test progress percentage
+        let percentage = (progress.uploaded_bytes as f64 / progress.total_bytes as f64) * 100.0;
+        assert_eq!(percentage, 50.0);
+    }
+
+    #[test]
+    fn test_completed_part() {
+        let part = CompletedPart {
+            part_number: 1,
+            etag: "test-etag".to_string(),
+        };
+
+        assert_eq!(part.part_number, 1);
+        assert_eq!(part.etag, "test-etag");
+    }
 }

@@ -593,4 +593,152 @@ mod tests {
         assert_eq!(params.policy.permission_groups.len(), 1);
         assert!(params.condition.is_some());
     }
+
+    #[test]
+    fn test_cloudflare_client_creation() {
+        let api_token = "test-api-token".to_string();
+        let account_id = "test-account-id".to_string();
+
+        let client = CloudflareClient::new(api_token.clone(), account_id.to_string());
+
+        assert_eq!(client.account_id, "test-account-id");
+        assert_eq!(client.api_token, "test-api-token");
+    }
+
+    #[test]
+    fn test_r2_bucket_creation() {
+        let bucket = R2Bucket {
+            name: "test-bucket".to_string(),
+            location: "wnam".to_string(),
+            creation_date: "2024-01-01T00:00:00Z".to_string(),
+        };
+
+        assert_eq!(bucket.name, "test-bucket");
+        assert_eq!(bucket.location, "wnam");
+        assert_eq!(bucket.creation_date, "2024-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn test_cors_rule() {
+        let rule = CorsRule {
+            allowed_origins: vec!["https://example.com".to_string()],
+            allowed_methods: vec!["GET".to_string(), "PUT".to_string(), "DELETE".to_string()],
+            allowed_headers: Some(vec!["*".to_string()]),
+            max_age_seconds: Some(3600),
+        };
+
+        assert_eq!(rule.allowed_origins, vec!["https://example.com"]);
+        assert_eq!(rule.allowed_methods, vec!["GET", "PUT", "DELETE"]);
+        assert_eq!(rule.allowed_headers, Some(vec!["*".to_string()]));
+        assert_eq!(rule.max_age_seconds, Some(3600));
+    }
+
+    #[test]
+    fn test_bucket_cors_config() {
+        let config = BucketCorsConfig {
+            rules: vec![
+                CorsRule {
+                    allowed_origins: vec!["*".to_string()],
+                    allowed_methods: vec!["GET".to_string(), "HEAD".to_string()],
+                    allowed_headers: None,
+                    max_age_seconds: None,
+                }
+            ],
+        };
+
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].allowed_origins, vec!["*"]);
+        assert_eq!(config.rules[0].allowed_methods, vec!["GET", "HEAD"]);
+    }
+
+    #[test]
+    fn test_lifecycle_filter() {
+        let filter = LifecycleFilter {
+            prefix: Some("logs/".to_string()),
+        };
+
+        assert_eq!(filter.prefix, Some("logs/".to_string()));
+    }
+
+    #[test]
+    fn test_lifecycle_expiration() {
+        let expiration = LifecycleExpiration {
+            days: Some(30),
+        };
+
+        assert_eq!(expiration.days, Some(30));
+    }
+
+    #[test]
+    fn test_lifecycle_rule() {
+        let rule = LifecycleRule {
+            id: "log-rotation".to_string(),
+            filter: LifecycleFilter {
+                prefix: Some("logs/".to_string()),
+            },
+            status: "Enabled".to_string(),
+            expiration: Some(LifecycleExpiration {
+                days: Some(30),
+            }),
+        };
+
+        assert_eq!(rule.id, "log-rotation");
+        assert_eq!(rule.status, "Enabled");
+        assert_eq!(rule.filter.prefix, Some("logs/".to_string()));
+        assert_eq!(rule.expiration.unwrap().days, Some(30));
+    }
+
+    #[test]
+    fn test_lifecycle_configuration() {
+        let config = LifecycleConfiguration {
+            rules: vec![
+                LifecycleRule {
+                    id: "delete-old-videos".to_string(),
+                    filter: LifecycleFilter {
+                        prefix: Some("videos/".to_string()),
+                    },
+                    status: "Enabled".to_string(),
+                    expiration: Some(LifecycleExpiration {
+                        days: Some(90),
+                    }),
+                }
+            ],
+        };
+
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "delete-old-videos");
+    }
+
+    #[test]
+    fn test_index_document() {
+        let index = IndexDocument {
+            suffix: "index.html".to_string(),
+        };
+
+        assert_eq!(index.suffix, "index.html");
+    }
+
+    #[test]
+    fn test_error_document() {
+        let error = ErrorDocument {
+            key: "404.html".to_string(),
+        };
+
+        assert_eq!(error.key, "404.html");
+    }
+
+    #[test]
+    fn test_website_configuration() {
+        let config = WebsiteConfiguration {
+            index_document: Some(IndexDocument {
+                suffix: "index.html".to_string(),
+            }),
+            error_document: Some(ErrorDocument {
+                key: "error.html".to_string(),
+            }),
+        };
+
+        assert_eq!(config.index_document.unwrap().suffix, "index.html");
+        assert_eq!(config.error_document.unwrap().key, "error.html");
+    }
 }

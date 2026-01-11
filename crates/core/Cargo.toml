@@ -33,3 +33,8 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 
 # Logging
 tracing.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+tempfile.workspace = true
+uuid.workspace = true
