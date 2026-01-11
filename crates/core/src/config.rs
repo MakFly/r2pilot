@@ -177,12 +177,14 @@ fn default_color() -> String {
 
 /// Get the configuration directory
 pub fn get_config_dir() -> Result<PathBuf> {
-    let home = home_dir().ok_or_else(|| Error::Config("Cannot determine home directory".to_string()))?;
+    let home =
+        home_dir().ok_or_else(|| Error::Config("Cannot determine home directory".to_string()))?;
     let config_dir = home.join(".config").join(CONFIG_DIR);
 
     // Create directory if it doesn't exist
     if !config_dir.exists() {
-        fs::create_dir_all(&config_dir).map_err(|e| Error::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| Error::Config(format!("Failed to create config directory: {}", e)))?;
     }
 
     Ok(config_dir)
@@ -206,13 +208,11 @@ pub fn load_config() -> Result<ConfigFile> {
         return Err(Error::ConfigNotFound(config_path));
     }
 
-    let content = fs::read_to_string(&config_path).map_err(|e| {
-        Error::InvalidConfig(format!("Failed to read config file: {}", e))
-    })?;
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| Error::InvalidConfig(format!("Failed to read config file: {}", e)))?;
 
-    let config: ConfigFile = toml::from_str(&content).map_err(|e| {
-        Error::InvalidConfig(format!("Failed to parse config file: {}", e))
-    })?;
+    let config: ConfigFile = toml::from_str(&content)
+        .map_err(|e| Error::InvalidConfig(format!("Failed to parse config file: {}", e)))?;
 
     Ok(config)
 }
@@ -221,13 +221,11 @@ pub fn load_config() -> Result<ConfigFile> {
 pub fn save_config(config: &ConfigFile) -> Result<()> {
     let config_path = get_config_path()?;
 
-    let content = toml::to_string_pretty(config).map_err(|e| {
-        Error::InvalidConfig(format!("Failed to serialize config: {}", e))
-    })?;
+    let content = toml::to_string_pretty(config)
+        .map_err(|e| Error::InvalidConfig(format!("Failed to serialize config: {}", e)))?;
 
-    fs::write(&config_path, content).map_err(|e| {
-        Error::Config(format!("Failed to write config file: {}", e))
-    })?;
+    fs::write(&config_path, content)
+        .map_err(|e| Error::Config(format!("Failed to write config file: {}", e)))?;
 
     // Set secure permissions on config file (read/write for owner only)
     #[cfg(unix)]
@@ -253,8 +251,8 @@ pub fn validate_config(config: &ConfigFile) -> Result<()> {
 
     // Validate authentication method
     let has_api_token = config.cloudflare.api_token.is_some();
-    let has_access_keys = config.cloudflare.access_key_id.is_some()
-        && config.cloudflare.secret_access_key.is_some();
+    let has_access_keys =
+        config.cloudflare.access_key_id.is_some() && config.cloudflare.secret_access_key.is_some();
 
     if !has_api_token && !has_access_keys {
         return Err(Error::Config(
@@ -264,14 +262,16 @@ pub fn validate_config(config: &ConfigFile) -> Result<()> {
 
     // Validate bucket name
     if config.r2.default_bucket.is_empty() {
-        return Err(Error::InvalidInput("Bucket name cannot be empty".to_string()));
+        return Err(Error::InvalidInput(
+            "Bucket name cannot be empty".to_string(),
+        ));
     }
 
     // Validate expiration time
     if config.r2.default_expiration > 604800 {
         // 7 days in seconds
         return Err(Error::InvalidInput(
-            "Default expiration cannot exceed 7 days (604800 seconds)".to_string()
+            "Default expiration cannot exceed 7 days (604800 seconds)".to_string(),
         ));
     }
 

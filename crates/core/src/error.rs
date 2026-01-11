@@ -252,7 +252,9 @@ mod tests {
     #[test]
     fn test_error_presigned_url_config() {
         let error = Error::PresignedUrlConfig("Invalid expiration".to_string());
-        assert!(error.to_string().contains("Invalid presigned URL configuration"));
+        assert!(error
+            .to_string()
+            .contains("Invalid presigned URL configuration"));
         assert!(error.to_string().contains("Invalid expiration"));
     }
 

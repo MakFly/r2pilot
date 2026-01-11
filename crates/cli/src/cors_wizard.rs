@@ -24,29 +24,17 @@ pub async fn run_cors_wizard() -> Result<BucketCorsConfig> {
             .with_prompt("Enter allowed origins (comma-separated, e.g., https://example.com,https://app.example.com)")
             .allow_empty(false)
             .interact()?;
-        input.split(',')
-            .map(|s| s.trim().to_string())
-            .collect()
+        input.split(',').map(|s| s.trim().to_string()).collect()
     };
 
     // Select allowed methods
     let methods_selection = MultiSelect::with_theme(&theme)
         .with_prompt("Select allowed HTTP methods")
-        .items(&[
-            "GET",
-            "PUT",
-            "POST",
-            "DELETE",
-            "HEAD",
-            "OPTIONS",
-        ])
+        .items(&["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"])
         .defaults(&[true, false, false, false, false, true])
         .interact()?;
 
-    let allowed_methods: Vec<String> = methods_selection
-        .iter()
-        .map(|&s| s.to_string())
-        .collect();
+    let allowed_methods: Vec<String> = methods_selection.iter().map(|&s| s.to_string()).collect();
 
     // Allowed headers
     let allow_all_headers = Confirm::with_theme(&theme)
@@ -58,15 +46,20 @@ pub async fn run_cors_wizard() -> Result<BucketCorsConfig> {
         Some(vec!["*".to_string()])
     } else {
         let input: String = Input::with_theme(&theme)
-            .with_prompt("Enter allowed headers (comma-separated, e.g., Content-Type,Authorization)")
+            .with_prompt(
+                "Enter allowed headers (comma-separated, e.g., Content-Type,Authorization)",
+            )
             .allow_empty(true)
             .interact()?;
         if input.is_empty() {
             None
         } else {
-            Some(input.split(',')
-                .map(|s| s.trim().to_string())
-                .collect::<Vec<_>>())
+            Some(
+                input
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect::<Vec<_>>(),
+            )
         }
     };
 
@@ -86,9 +79,7 @@ pub async fn run_cors_wizard() -> Result<BucketCorsConfig> {
         max_age_seconds,
     };
 
-    let config = BucketCorsConfig {
-        rules: vec![rule],
-    };
+    let config = BucketCorsConfig { rules: vec![rule] };
 
     println!();
     println!("✅ CORS configuration created!");
@@ -103,7 +94,8 @@ pub async fn run_cors_wizard() -> Result<BucketCorsConfig> {
 
 /// Create a CORS config from JSON file
 pub async fn load_cors_from_file(file_path: &str) -> Result<BucketCorsConfig> {
-    let content = tokio::fs::read_to_string(file_path).await
+    let content = tokio::fs::read_to_string(file_path)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to read file {}: {}", file_path, e))?;
 
     let config: BucketCorsConfig = serde_json::from_str(&content)
@@ -117,7 +109,8 @@ pub async fn save_cors_to_file(file_path: &str, config: &BucketCorsConfig) -> Re
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| anyhow::anyhow!("Failed to serialize config: {}", e))?;
 
-    tokio::fs::write(file_path, json).await
+    tokio::fs::write(file_path, json)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to write file {}: {}", file_path, e))?;
 
     Ok(())

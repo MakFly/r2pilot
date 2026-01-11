@@ -156,7 +156,11 @@ impl CloudflareClient {
     }
 
     /// Set CORS configuration for a bucket
-    pub async fn put_bucket_cors(&self, bucket_name: &str, config: &BucketCorsConfig) -> Result<()> {
+    pub async fn put_bucket_cors(
+        &self,
+        bucket_name: &str,
+        config: &BucketCorsConfig,
+    ) -> Result<()> {
         let response = self
             .http_client
             .put(&format!(
@@ -209,7 +213,11 @@ impl CloudflareClient {
     }
 
     /// Set lifecycle rules for a bucket
-    pub async fn put_bucket_lifecycle(&self, bucket_name: &str, config: &LifecycleConfiguration) -> Result<()> {
+    pub async fn put_bucket_lifecycle(
+        &self,
+        bucket_name: &str,
+        config: &LifecycleConfiguration,
+    ) -> Result<()> {
         let response = self
             .http_client
             .put(&format!(
@@ -246,7 +254,11 @@ impl CloudflareClient {
     // === Public Bucket / Website Configuration ===
 
     /// Enable static hosting for a bucket
-    pub async fn put_bucket_website(&self, bucket_name: &str, config: &WebsiteConfiguration) -> Result<()> {
+    pub async fn put_bucket_website(
+        &self,
+        bucket_name: &str,
+        config: &WebsiteConfiguration,
+    ) -> Result<()> {
         let response = self
             .http_client
             .put(&format!(
@@ -316,7 +328,9 @@ impl CloudflareClient {
         } else if status.as_u16() == 401 {
             Err(Error::Authentication("Invalid API token".to_string()))
         } else if status.as_u16() == 403 {
-            Err(Error::PermissionDenied("Insufficient permissions".to_string()))
+            Err(Error::PermissionDenied(
+                "Insufficient permissions".to_string(),
+            ))
         } else if status.as_u16() == 404 {
             Err(Error::NotFound("Resource not found".to_string()))
         } else {
@@ -567,9 +581,7 @@ impl R2TokenBuilder {
             },
             condition: self.ip_whitelist.map(|ips| TokenCondition {
                 request: Some(RequestCondition {
-                    ip: Some(IpCondition {
-                        in_list: Some(ips),
-                    }),
+                    ip: Some(IpCondition { in_list: Some(ips) }),
                 }),
             }),
         }
@@ -582,12 +594,11 @@ mod tests {
 
     #[test]
     fn test_r2_token_builder() {
-        let builder = R2TokenBuilder::new(
-            "Test Token".to_string(),
-            "abc123def456".to_string(),
-        );
+        let builder = R2TokenBuilder::new("Test Token".to_string(), "abc123def456".to_string());
 
-        let params = builder.ip_whitelist(vec!["192.168.1.1".to_string()]).build();
+        let params = builder
+            .ip_whitelist(vec!["192.168.1.1".to_string()])
+            .build();
 
         assert_eq!(params.name, "Test Token");
         assert_eq!(params.policy.permission_groups.len(), 1);
@@ -636,14 +647,12 @@ mod tests {
     #[test]
     fn test_bucket_cors_config() {
         let config = BucketCorsConfig {
-            rules: vec![
-                CorsRule {
-                    allowed_origins: vec!["*".to_string()],
-                    allowed_methods: vec!["GET".to_string(), "HEAD".to_string()],
-                    allowed_headers: None,
-                    max_age_seconds: None,
-                }
-            ],
+            rules: vec![CorsRule {
+                allowed_origins: vec!["*".to_string()],
+                allowed_methods: vec!["GET".to_string(), "HEAD".to_string()],
+                allowed_headers: None,
+                max_age_seconds: None,
+            }],
         };
 
         assert_eq!(config.rules.len(), 1);
@@ -662,9 +671,7 @@ mod tests {
 
     #[test]
     fn test_lifecycle_expiration() {
-        let expiration = LifecycleExpiration {
-            days: Some(30),
-        };
+        let expiration = LifecycleExpiration { days: Some(30) };
 
         assert_eq!(expiration.days, Some(30));
     }
@@ -677,9 +684,7 @@ mod tests {
                 prefix: Some("logs/".to_string()),
             },
             status: "Enabled".to_string(),
-            expiration: Some(LifecycleExpiration {
-                days: Some(30),
-            }),
+            expiration: Some(LifecycleExpiration { days: Some(30) }),
         };
 
         assert_eq!(rule.id, "log-rotation");
@@ -691,18 +696,14 @@ mod tests {
     #[test]
     fn test_lifecycle_configuration() {
         let config = LifecycleConfiguration {
-            rules: vec![
-                LifecycleRule {
-                    id: "delete-old-videos".to_string(),
-                    filter: LifecycleFilter {
-                        prefix: Some("videos/".to_string()),
-                    },
-                    status: "Enabled".to_string(),
-                    expiration: Some(LifecycleExpiration {
-                        days: Some(90),
-                    }),
-                }
-            ],
+            rules: vec![LifecycleRule {
+                id: "delete-old-videos".to_string(),
+                filter: LifecycleFilter {
+                    prefix: Some("videos/".to_string()),
+                },
+                status: "Enabled".to_string(),
+                expiration: Some(LifecycleExpiration { days: Some(90) }),
+            }],
         };
 
         assert_eq!(config.rules.len(), 1);

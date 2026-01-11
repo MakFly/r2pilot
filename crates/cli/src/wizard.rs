@@ -1,12 +1,9 @@
 //! Interactive setup wizard for r2pilot configuration
 
-use r2pilot_core::{save_config, CloudflareConfig, ConfigFile, R2Config};
 use anyhow::Result;
-use dialoguer::{
-    theme::ColorfulTheme,
-    Confirm, Input, Password, Select,
-};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, Password, Select};
 use indicatif::{ProgressBar, ProgressStyle};
+use r2pilot_core::{save_config, CloudflareConfig, ConfigFile, R2Config};
 
 /// Run the interactive setup wizard
 pub async fn run_init_wizard() -> Result<()> {
@@ -35,7 +32,14 @@ pub async fn run_init_wizard() -> Result<()> {
     println!("  Account ID: {}", account_id);
     println!("  Endpoint: {}", endpoint);
     println!("  Bucket: {}", default_bucket);
-    println!("  Auth: {}", if api_token.is_some() { "API Token" } else { "Access Keys" });
+    println!(
+        "  Auth: {}",
+        if api_token.is_some() {
+            "API Token"
+        } else {
+            "Access Keys"
+        }
+    );
 
     // Confirmation
     let confirm = Confirm::with_theme(&ColorfulTheme::default())
@@ -69,7 +73,9 @@ pub async fn run_init_wizard() -> Result<()> {
 
     // Save config
     let pb = ProgressBar::new(2);
-    pb.set_style(ProgressStyle::default_bar().template("{spinner:.green} [{elapsed_precise}] {msg}")?);
+    pb.set_style(
+        ProgressStyle::default_bar().template("{spinner:.green} [{elapsed_precise}] {msg}")?,
+    );
     pb.set_message("Saving configuration...");
 
     save_config(&config)?;
@@ -185,7 +191,10 @@ fn prompt_bucket_name() -> Result<String> {
                 Err("Bucket name must be at least 3 characters")
             } else if input.len() > 63 {
                 Err("Bucket name must be less than 64 characters")
-            } else if !input.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '.') {
+            } else if !input
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '-' || c == '.')
+            {
                 Err("Bucket name can only contain alphanumeric characters, hyphens, and dots")
             } else {
                 Ok(())

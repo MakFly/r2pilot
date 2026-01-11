@@ -6,8 +6,8 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client,
 };
-use std::time::Duration;
 use std::path::Path;
+use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -70,7 +70,8 @@ impl R2Client {
     ) -> Result<Self> {
         let endpoint_clone = endpoint.clone();
         // Create credentials
-        let credentials = Credentials::new(&access_key_id, &secret_access_key, None, None, "r2pilot");
+        let credentials =
+            Credentials::new(&access_key_id, &secret_access_key, None, None, "r2pilot");
 
         // Build AWS config for R2 (S3-compatible)
         let config_builder = aws_sdk_s3::Config::builder()
@@ -92,34 +93,24 @@ impl R2Client {
     }
 
     /// Upload a file to R2
-    pub async fn upload_file(
-        &self,
-        key: &str,
-        file_path: &Path,
-        content_type: &str,
-    ) -> Result<()> {
+    pub async fn upload_file(&self, key: &str, file_path: &Path, content_type: &str) -> Result<()> {
         // Read file content
-        let mut file = File::open(file_path).await.map_err(|e| {
-            Error::Io(e)
-        })?;
+        let mut file = File::open(file_path).await.map_err(|e| Error::Io(e))?;
 
         let metadata = file.metadata().await.map_err(|e| Error::Io(e))?;
         let buffer_size = metadata.len() as usize;
         let mut buffer = Vec::with_capacity(buffer_size);
 
-        file.read_to_end(&mut buffer).await.map_err(|e| Error::Io(e))?;
+        file.read_to_end(&mut buffer)
+            .await
+            .map_err(|e| Error::Io(e))?;
 
         // Upload to R2
         self.upload_bytes(key, buffer, content_type).await
     }
 
     /// Upload bytes to R2
-    pub async fn upload_bytes(
-        &self,
-        key: &str,
-        body: Vec<u8>,
-        content_type: &str,
-    ) -> Result<()> {
+    pub async fn upload_bytes(&self, key: &str, body: Vec<u8>, content_type: &str) -> Result<()> {
         self.client
             .put_object()
             .bucket(&self.bucket)
@@ -147,11 +138,15 @@ impl R2Client {
 
         // Create parent directories if needed
         if let Some(parent) = dest_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| Error::Io(e))?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| Error::Io(e))?;
         }
 
         // Write file
-        tokio::fs::write(dest_path, data).await.map_err(|e| Error::Io(e))?;
+        tokio::fs::write(dest_path, data)
+            .await
+            .map_err(|e| Error::Io(e))?;
 
         Ok(())
     }
@@ -217,12 +212,22 @@ impl R2Client {
 
     /// Check if an object exists
     pub async fn object_exists(&self, key: &str) -> Result<bool> {
-        match self.client.head_object().bucket(&self.bucket).key(key).send().await {
+        match self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await
+        {
             Ok(_) => Ok(true),
             Err(e) => {
                 // Check if it's a "not found" error
                 let err_str = e.to_string().to_lowercase();
-                if err_str.contains("nosuchkey") || err_str.contains("not found") || err_str.contains("404") {
+                if err_str.contains("nosuchkey")
+                    || err_str.contains("not found")
+                    || err_str.contains("404")
+                {
                     Ok(false)
                 } else {
                     Err(Error::R2Operation(e.to_string()))
@@ -306,10 +311,7 @@ impl R2Client {
             .map(|etag| etag.to_string())
             .ok_or_else(|| Error::MultipartUpload("No ETag returned for part".to_string()))?;
 
-        Ok(CompletedPart {
-            part_number,
-            etag,
-        })
+        Ok(CompletedPart { part_number, etag })
     }
 
     /// Complete a multipart upload
@@ -402,7 +404,10 @@ impl R2Client {
             buffer.truncate(n);
 
             // Upload part
-            match self.upload_part(key, &upload_id, current_part, buffer).await {
+            match self
+                .upload_part(key, &upload_id, current_part, buffer)
+                .await
+            {
                 Ok(part) => parts.push(part),
                 Err(e) => {
                     // Abort on error
@@ -413,7 +418,8 @@ impl R2Client {
         }
 
         // Complete multipart upload
-        self.complete_multipart_upload(key, &upload_id, parts).await?;
+        self.complete_multipart_upload(key, &upload_id, parts)
+            .await?;
 
         Ok(())
     }
@@ -424,19 +430,18 @@ impl R2Client {
     /// This method returns a direct URL. For presigned URLs, ensure your bucket
     /// has the proper CORS configuration and consider using R2's built-in
     /// URL signing features.
-    pub async fn generate_presigned_url(
-        &self,
-        key: &str,
-        expires_in: Duration,
-    ) -> Result<String> {
+    pub async fn generate_presigned_url(&self, key: &str, expires_in: Duration) -> Result<String> {
         use http::Uri;
         use std::time::{SystemTime, UNIX_EPOCH};
 
         // Parse endpoint to extract host
-        let endpoint_uri: Uri = self.endpoint.parse()
+        let endpoint_uri: Uri = self
+            .endpoint
+            .parse()
             .map_err(|e| Error::InvalidConfig(format!("Invalid endpoint URL: {}", e)))?;
 
-        let host = endpoint_uri.host()
+        let host = endpoint_uri
+            .host()
             .ok_or_else(|| Error::InvalidConfig("Endpoint has no host".to_string()))?;
 
         // Build the object URL
@@ -453,11 +458,7 @@ impl R2Client {
 
         // Build presigned URL parameters (simplified - needs full AWS SigV4 implementation)
         // For now, return the direct URL with expiration info
-        Ok(format!(
-            "{}?expires={}",
-            url,
-            expires_timestamp
-        ))
+        Ok(format!("{}?expires={}", url, expires_timestamp))
     }
 
     /// Get the bucket name
@@ -541,7 +542,7 @@ mod tests {
     fn test_multipart_upload_progress() {
         let progress = MultipartUploadProgress {
             upload_id: "test-upload-id".to_string(),
-            total_bytes: 1024 * 1024, // 1MB
+            total_bytes: 1024 * 1024,   // 1MB
             uploaded_bytes: 512 * 1024, // 512KB
             completed_parts: 2,
             total_parts: 4,

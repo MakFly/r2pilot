@@ -1,17 +1,15 @@
 //! Command handlers for r2pilot CLI
 
-use clap::Command;
-use clap_complete::{generate, Shell as ClapShell};
 use crate::wizard::run_init_wizard;
 use anyhow::Result;
+use clap::Command;
+use clap_complete::{generate, Shell as ClapShell};
 use r2pilot_core::{
-    R2Client,
-    load_config, validate_config, get_config_path,
-    MultipartUploadConfig, PresignedMethod, PresignedUrlConfig,
-    generate_presigned_url,
+    generate_presigned_url, get_config_path, load_config, validate_config, MultipartUploadConfig,
+    PresignedMethod, PresignedUrlConfig, R2Client,
 };
-use tabled::{Table, Tabled};
 use std::path::Path;
+use tabled::{Table, Tabled};
 
 /// Handle init command
 pub async fn handle_init() -> Result<()> {
@@ -30,7 +28,8 @@ pub async fn handle_config(action: &str) -> Result<()> {
             println!("Cloudflare:");
             println!("  Account ID: {}", &config.cloudflare.account_id[..8]);
             println!("  Endpoint: {}", config.cloudflare.endpoint);
-            println!("  Auth: {}",
+            println!(
+                "  Auth: {}",
                 if config.cloudflare.api_token.is_some() {
                     "API Token"
                 } else {
@@ -55,21 +54,24 @@ pub async fn handle_config(action: &str) -> Result<()> {
             println!("  ✅ Valid configuration format");
 
             // Get R2 credentials
-            let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
-                return Err(anyhow::anyhow!(
-                    "Validation via API Token not yet implemented.\n\
+            let (access_key_id, secret_access_key) =
+                if let Some(_token) = &config.cloudflare.api_token {
+                    return Err(anyhow::anyhow!(
+                        "Validation via API Token not yet implemented.\n\
                      Use Access Keys in your configuration.\n\
                      Get your Access Keys from: https://dash.cloudflare.com/{}/r2/api-tokens",
-                    config.cloudflare.account_id
-                ));
-            } else {
-                (
-                    config.cloudflare.access_key_id.clone()
-                        .ok_or_else(|| anyhow::anyhow!("Access Key ID not configured (run 'r2pilot init')"))?,
-                    config.cloudflare.secret_access_key.clone()
-                        .ok_or_else(|| anyhow::anyhow!("Secret Access Key not configured (run 'r2pilot init')"))?,
-                )
-            };
+                        config.cloudflare.account_id
+                    ));
+                } else {
+                    (
+                        config.cloudflare.access_key_id.clone().ok_or_else(|| {
+                            anyhow::anyhow!("Access Key ID not configured (run 'r2pilot init')")
+                        })?,
+                        config.cloudflare.secret_access_key.clone().ok_or_else(|| {
+                            anyhow::anyhow!("Secret Access Key not configured (run 'r2pilot init')")
+                        })?,
+                    )
+                };
 
             println!("  Testing R2 connection...");
             let r2_client = R2Client::new(
@@ -77,7 +79,8 @@ pub async fn handle_config(action: &str) -> Result<()> {
                 access_key_id,
                 secret_access_key,
                 config.r2.default_bucket.clone(),
-            ).await?;
+            )
+            .await?;
 
             // Try to list objects as a connection test
             let _objects = r2_client.list_objects(None).await?;
@@ -127,11 +130,13 @@ pub async fn handle_tokens(action: &str, token_id: Option<&str>) -> Result<()> {
     let config = load_config()?;
 
     // Get API token for Cloudflare API access
-    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-        "API Token required to manage tokens.\n\
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "API Token required to manage tokens.\n\
          Add 'api_token' to your configuration.\n\
          Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
-    ))?;
+        )
+    })?;
 
     let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
 
@@ -154,13 +159,20 @@ pub async fn handle_tokens(action: &str, token_id: Option<&str>) -> Result<()> {
                     expires: String,
                 }
 
-                let rows: Vec<TokenRow> = tokens.iter().map(|t| TokenRow {
-                    name: t.name.clone(),
-                    status: format_status(&t.status),
-                    id: format_id(&t.id),
-                    issued: format_date(&t.issued_on),
-                    expires: t.expires_on.as_ref().map(|d| format_date(d)).unwrap_or_else(|| "Never".to_string()),
-                }).collect();
+                let rows: Vec<TokenRow> = tokens
+                    .iter()
+                    .map(|t| TokenRow {
+                        name: t.name.clone(),
+                        status: format_status(&t.status),
+                        id: format_id(&t.id),
+                        issued: format_date(&t.issued_on),
+                        expires: t
+                            .expires_on
+                            .as_ref()
+                            .map(|d| format_date(d))
+                            .unwrap_or_else(|| "Never".to_string()),
+                    })
+                    .collect();
 
                 println!("{}", Table::new(rows));
             }
@@ -169,7 +181,7 @@ pub async fn handle_tokens(action: &str, token_id: Option<&str>) -> Result<()> {
         }
         "create" => {
             // Interactive prompt for token creation
-            use dialoguer::{Input, theme::ColorfulTheme};
+            use dialoguer::{theme::ColorfulTheme, Input};
 
             let theme = ColorfulTheme::default();
 
@@ -197,7 +209,9 @@ pub async fn handle_tokens(action: &str, token_id: Option<&str>) -> Result<()> {
             Ok(())
         }
         "revoke" => {
-            let id = token_id.ok_or_else(|| anyhow::anyhow!("Token ID required (use 'tokens list' to see IDs)"))?;
+            let id = token_id.ok_or_else(|| {
+                anyhow::anyhow!("Token ID required (use 'tokens list' to see IDs)")
+            })?;
 
             println!("⚠️  Warning: you are about to revoke token '{}'", id);
             println!("  This action is IRREVERSIBLE!");
@@ -244,12 +258,14 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
     match action {
         "list" => {
             // List buckets requires Cloudflare API token
-            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-                "API Token required to list buckets.\n\
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "API Token required to list buckets.\n\
                  Add 'api_token' to your configuration.\n\
                  Get an API Token from: https://dash.cloudflare.com/{}/r2/api-tokens",
-                config.cloudflare.account_id
-            ))?;
+                    config.cloudflare.account_id
+                )
+            })?;
 
             println!("Listing R2 buckets...");
             println!();
@@ -267,11 +283,14 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
                     created: String,
                 }
 
-                let rows: Vec<BucketRow> = buckets.iter().map(|b| BucketRow {
-                    name: b.name.clone(),
-                    location: b.location.clone(),
-                    created: format_date(&b.creation_date),
-                }).collect();
+                let rows: Vec<BucketRow> = buckets
+                    .iter()
+                    .map(|b| BucketRow {
+                        name: b.name.clone(),
+                        location: b.location.clone(),
+                        created: format_date(&b.creation_date),
+                    })
+                    .collect();
 
                 println!("{}", Table::new(rows));
             }
@@ -283,12 +302,14 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
         "create" => {
             let bucket_name = name.ok_or_else(|| anyhow::anyhow!("Bucket name required"))?;
 
-            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-                "API Token required to create buckets.\n\
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "API Token required to create buckets.\n\
                  Add 'api_token' to your configuration.\n\
                  Get an API Token from: https://dash.cloudflare.com/{}/r2/api-tokens",
-                config.cloudflare.account_id
-            ))?;
+                    config.cloudflare.account_id
+                )
+            })?;
 
             println!("Creating bucket '{}'...", bucket_name);
 
@@ -312,12 +333,17 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
                 ));
             }
 
-            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-                "API Token required to delete buckets.\n\
+            let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "API Token required to delete buckets.\n\
                  Add 'api_token' to your configuration."
-            ))?;
+                )
+            })?;
 
-            println!("⚠️  Warning: you are about to delete bucket '{}'", bucket_name);
+            println!(
+                "⚠️  Warning: you are about to delete bucket '{}'",
+                bucket_name
+            );
             println!("  This action is IRREVERSIBLE!");
 
             let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
@@ -329,20 +355,23 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
         }
         "info" | "ls" => {
             // Get R2 credentials for S3 API access
-            let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
-                return Err(anyhow::anyhow!(
-                    "The '{}' command requires R2 Access Keys.\n\
+            let (access_key_id, secret_access_key) =
+                if let Some(_token) = &config.cloudflare.api_token {
+                    return Err(anyhow::anyhow!(
+                        "The '{}' command requires R2 Access Keys.\n\
                      Configure access_key_id and secret_access_key to use S3 operations.",
-                    action
-                ));
-            } else {
-                (
-                    config.cloudflare.access_key_id.clone()
-                        .ok_or_else(|| anyhow::anyhow!("Access Key ID not configured (run 'r2pilot init')"))?,
-                    config.cloudflare.secret_access_key.clone()
-                        .ok_or_else(|| anyhow::anyhow!("Secret Access Key not configured (run 'r2pilot init')"))?,
-                )
-            };
+                        action
+                    ));
+                } else {
+                    (
+                        config.cloudflare.access_key_id.clone().ok_or_else(|| {
+                            anyhow::anyhow!("Access Key ID not configured (run 'r2pilot init')")
+                        })?,
+                        config.cloudflare.secret_access_key.clone().ok_or_else(|| {
+                            anyhow::anyhow!("Secret Access Key not configured (run 'r2pilot init')")
+                        })?,
+                    )
+                };
 
             let bucket = name.unwrap_or(&config.r2.default_bucket);
 
@@ -351,7 +380,8 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
                 access_key_id,
                 secret_access_key,
                 bucket.to_string(),
-            ).await?;
+            )
+            .await?;
 
             if action == "info" {
                 println!("Bucket '{}' information...", bucket);
@@ -375,10 +405,13 @@ pub async fn handle_buckets(action: &str, name: Option<&str>) -> Result<()> {
                         size: String,
                     }
 
-                    let rows: Vec<ObjectRow> = objects.iter().map(|o| ObjectRow {
-                        key: o.key.clone(),
-                        size: format_bytes(o.size),
-                    }).collect();
+                    let rows: Vec<ObjectRow> = objects
+                        .iter()
+                        .map(|o| ObjectRow {
+                            key: o.key.clone(),
+                            size: format_bytes(o.size),
+                        })
+                        .collect();
 
                     println!();
                     println!("{}", Table::new(rows));
@@ -437,7 +470,8 @@ pub async fn handle_files(
         access_key_id,
         secret_access_key,
         bucket.to_string(),
-    ).await?;
+    )
+    .await?;
 
     match action {
         "upload" => {
@@ -471,7 +505,9 @@ pub async fn handle_files(
                     concurrent_parts: advanced.max_concurrent_uploads,
                 };
 
-                r2_client.upload_file_multipart(key, path, &content_type, multipart_config).await?;
+                r2_client
+                    .upload_file_multipart(key, path, &content_type, multipart_config)
+                    .await?;
             } else {
                 r2_client.upload_file(key, path, &content_type).await?;
             }
@@ -513,10 +549,13 @@ pub async fn handle_files(
                     size: String,
                 }
 
-                let rows: Vec<ObjectRow> = objects.iter().map(|o| ObjectRow {
-                    key: o.key.clone(),
-                    size: format_bytes(o.size),
-                }).collect();
+                let rows: Vec<ObjectRow> = objects
+                    .iter()
+                    .map(|o| ObjectRow {
+                        key: o.key.clone(),
+                        size: format_bytes(o.size),
+                    })
+                    .collect();
 
                 println!();
                 println!("{}", Table::new(rows));
@@ -555,10 +594,18 @@ pub async fn handle_urls(
         "get" => PresignedMethod::Get,
         "put" => PresignedMethod::Put,
         "delete" => PresignedMethod::Delete,
-        _ => return Err(anyhow::anyhow!("Invalid method: {}. Valid methods: get, put, delete", method)),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Invalid method: {}. Valid methods: get, put, delete",
+                method
+            ))
+        }
     };
 
-    println!("Generating signed URL for {} (method: {}, expires: {}s)...", key, presigned_method, expires);
+    println!(
+        "Generating signed URL for {} (method: {}, expires: {}s)...",
+        key, presigned_method, expires
+    );
 
     // Build presigned URL config
     let mut presigned_config = PresignedUrlConfig::new(
@@ -583,12 +630,16 @@ pub async fn handle_urls(
     match output {
         "json" => {
             println!();
-            println!("{}", serde_json::json!({
-                "key": key,
-                "url": url,
-                "expires_in": expires,
-                "expires_at": chrono::Utc::now() + chrono::Duration::seconds(expires as i64)
-            }).to_string());
+            println!(
+                "{}",
+                serde_json::json!({
+                    "key": key,
+                    "url": url,
+                    "expires_in": expires,
+                    "expires_at": chrono::Utc::now() + chrono::Duration::seconds(expires as i64)
+                })
+                .to_string()
+            );
         }
         _ => {
             println!();
@@ -631,18 +682,19 @@ pub async fn handle_doctor(action: &str) -> Result<()> {
             let config = load_config()?;
 
             // Get R2 credentials
-            let (access_key_id, secret_access_key) = if let Some(_token) = &config.cloudflare.api_token {
-                return Err(anyhow::anyhow!(
-                    "API Token not supported yet.\n\
+            let (access_key_id, secret_access_key) =
+                if let Some(_token) = &config.cloudflare.api_token {
+                    return Err(anyhow::anyhow!(
+                        "API Token not supported yet.\n\
                      Use Access Keys in your configuration."
-                ));
-            } else {
-                println!("  Using configured Access Keys");
-                (
-                    config.cloudflare.access_key_id.clone().unwrap(),
-                    config.cloudflare.secret_access_key.clone().unwrap(),
-                )
-            };
+                    ));
+                } else {
+                    println!("  Using configured Access Keys");
+                    (
+                        config.cloudflare.access_key_id.clone().unwrap(),
+                        config.cloudflare.secret_access_key.clone().unwrap(),
+                    )
+                };
 
             println!("  Testing R2 connection...");
             let r2_client = R2Client::new(
@@ -650,7 +702,8 @@ pub async fn handle_doctor(action: &str) -> Result<()> {
                 access_key_id,
                 secret_access_key,
                 config.r2.default_bucket.clone(),
-            ).await?;
+            )
+            .await?;
 
             let _objects = r2_client.list_objects(None).await?;
             println!("  ✅ R2 connection OK");
@@ -717,7 +770,9 @@ pub async fn handle_completion(shell: &str, cmd: &mut Command) -> Result<()> {
             println!("  source <(r2pilot completion bash)");
             println!();
             println!("  # Or for permanent installation:");
-            println!("  r2pilot completion bash > ~/.local/share/bash-completion/completions/r2pilot");
+            println!(
+                "  r2pilot completion bash > ~/.local/share/bash-completion/completions/r2pilot"
+            );
         }
         "zsh" => {
             println!("  # Add to your ~/.zshrc:");
@@ -753,18 +808,25 @@ pub async fn handle_completion(shell: &str, cmd: &mut Command) -> Result<()> {
 }
 
 /// Handle CORS commands
-pub async fn handle_cors(action: &str, bucket: Option<&str>, file: Option<&str>, interactive: bool) -> Result<()> {
-    use r2pilot_core::CloudflareClient;
+pub async fn handle_cors(
+    action: &str,
+    bucket: Option<&str>,
+    file: Option<&str>,
+    interactive: bool,
+) -> Result<()> {
     use crate::cors_wizard;
+    use r2pilot_core::CloudflareClient;
 
     let config = load_config()?;
 
     // Get API token for Cloudflare API access
-    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-        "API Token required for CORS management.\n\
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "API Token required for CORS management.\n\
          Add 'api_token' to your configuration.\n\
          Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
-    ))?;
+        )
+    })?;
 
     let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
     let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
@@ -793,7 +855,9 @@ pub async fn handle_cors(action: &str, bucket: Option<&str>, file: Option<&str>,
             } else if let Some(file_path) = file {
                 cors_wizard::load_cors_from_file(file_path).await?
             } else {
-                return Err(anyhow::anyhow!("Either --interactive or --file must be specified"));
+                return Err(anyhow::anyhow!(
+                    "Either --interactive or --file must be specified"
+                ));
             };
 
             println!("Setting CORS configuration for '{}'...", bucket_name);
@@ -822,18 +886,25 @@ pub async fn handle_cors(action: &str, bucket: Option<&str>, file: Option<&str>,
 }
 
 /// Handle Lifecycle commands
-pub async fn handle_lifecycle(action: &str, bucket: Option<&str>, file: Option<&str>, interactive: bool) -> Result<()> {
-    use r2pilot_core::CloudflareClient;
+pub async fn handle_lifecycle(
+    action: &str,
+    bucket: Option<&str>,
+    file: Option<&str>,
+    interactive: bool,
+) -> Result<()> {
     use crate::lifecycle_wizard;
+    use r2pilot_core::CloudflareClient;
 
     let config = load_config()?;
 
     // Get API token for Cloudflare API access
-    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-        "API Token required for Lifecycle management.\n\
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "API Token required for Lifecycle management.\n\
          Add 'api_token' to your configuration.\n\
          Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
-    ))?;
+        )
+    })?;
 
     let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
     let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
@@ -853,7 +924,10 @@ pub async fn handle_lifecycle(action: &str, bucket: Option<&str>, file: Option<&
                     println!("    Filter Prefix: {}", prefix);
                 }
                 if let Some(expiration) = &rule.expiration {
-                    println!("    Expiration: {} days", expiration.days.as_ref().unwrap_or(&0));
+                    println!(
+                        "    Expiration: {} days",
+                        expiration.days.as_ref().unwrap_or(&0)
+                    );
                 }
             }
 
@@ -865,12 +939,16 @@ pub async fn handle_lifecycle(action: &str, bucket: Option<&str>, file: Option<&
             } else if let Some(file_path) = file {
                 lifecycle_wizard::load_lifecycle_from_file(file_path).await?
             } else {
-                return Err(anyhow::anyhow!("Either --interactive or --file must be specified"));
+                return Err(anyhow::anyhow!(
+                    "Either --interactive or --file must be specified"
+                ));
             };
 
             println!("Setting Lifecycle rules for '{}'...", bucket_name);
 
-            cf_client.put_bucket_lifecycle(bucket_name, &lifecycle_config).await?;
+            cf_client
+                .put_bucket_lifecycle(bucket_name, &lifecycle_config)
+                .await?;
 
             println!("  ✅ Lifecycle rules set");
             println!("  Note: Rules may take time to apply");
@@ -895,17 +973,24 @@ pub async fn handle_lifecycle(action: &str, bucket: Option<&str>, file: Option<&
 }
 
 /// Handle Website commands
-pub async fn handle_website(action: &str, bucket: Option<&str>, index: Option<&str>, error: Option<&str>) -> Result<()> {
-    use r2pilot_core::{CloudflareClient, WebsiteConfiguration, IndexDocument, ErrorDocument};
+pub async fn handle_website(
+    action: &str,
+    bucket: Option<&str>,
+    index: Option<&str>,
+    error: Option<&str>,
+) -> Result<()> {
+    use r2pilot_core::{CloudflareClient, ErrorDocument, IndexDocument, WebsiteConfiguration};
 
     let config = load_config()?;
 
     // Get API token for Cloudflare API access
-    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| anyhow::anyhow!(
-        "API Token required for Website management.\n\
+    let api_token = config.cloudflare.api_token.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "API Token required for Website management.\n\
          Add 'api_token' to your configuration.\n\
          Get an API Token from: https://dash.cloudflare.com/profile/api-tokens"
-    ))?;
+        )
+    })?;
 
     let cf_client = CloudflareClient::new(api_token, config.cloudflare.account_id.clone());
     let bucket_name = bucket.unwrap_or(&config.r2.default_bucket);
@@ -926,7 +1011,9 @@ pub async fn handle_website(action: &str, bucket: Option<&str>, index: Option<&s
                 }),
             };
 
-            cf_client.put_bucket_website(bucket_name, &website_config).await?;
+            cf_client
+                .put_bucket_website(bucket_name, &website_config)
+                .await?;
 
             println!("  ✅ Static hosting enabled");
             println!();
@@ -961,7 +1048,10 @@ pub async fn handle_website(action: &str, bucket: Option<&str>, index: Option<&s
                 println!("  Error Document: {}", error.key);
             }
             println!();
-            println!("  Public URL: https://{}.{}", bucket_name, config.cloudflare.account_id);
+            println!(
+                "  Public URL: https://{}.{}",
+                bucket_name, config.cloudflare.account_id
+            );
 
             Ok(())
         }

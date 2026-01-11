@@ -70,10 +70,12 @@ pub fn generate_presigned_url(
     config: PresignedUrlConfig,
 ) -> Result<String> {
     // Parse endpoint to get host
-    let endpoint_uri: http::Uri = endpoint.parse()
+    let endpoint_uri: http::Uri = endpoint
+        .parse()
         .map_err(|e| Error::PresignedUrlConfig(format!("Invalid endpoint URL: {}", e)))?;
 
-    let host = endpoint_uri.host()
+    let host = endpoint_uri
+        .host()
         .ok_or_else(|| Error::PresignedUrlConfig("Endpoint has no host".to_string()))?;
 
     // Build the object URL

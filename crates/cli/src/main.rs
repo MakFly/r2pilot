@@ -1,11 +1,11 @@
 use anyhow::Result;
-use clap::{Parser, CommandFactory};
+use clap::{CommandFactory, Parser};
 use color_eyre::config::HookBuilder;
 
-mod handlers;
-mod wizard;
 mod cors_wizard;
+mod handlers;
 mod lifecycle_wizard;
+mod wizard;
 
 /// r2pilot - CLI to manage Cloudflare R2
 #[derive(Parser, Debug)]
@@ -307,19 +307,68 @@ async fn main() -> Result<()> {
         }
         Commands::Files { action } => {
             let (action_str, file, key, bucket, prefix, progress, multipart) = match action {
-                FileAction::Upload { file, key, bucket, progress, multipart } => ("upload", Some(file), Some(key), bucket, None, progress, multipart),
-                FileAction::Download { key, dest, bucket } => ("download", Some(dest), Some(key), bucket, None, false, false),
-                FileAction::Delete { key, bucket } => ("delete", None, Some(key), bucket, None, false, false),
-                FileAction::Ls { prefix, bucket } => ("ls", None, None, bucket, prefix, false, false),
+                FileAction::Upload {
+                    file,
+                    key,
+                    bucket,
+                    progress,
+                    multipart,
+                } => (
+                    "upload",
+                    Some(file),
+                    Some(key),
+                    bucket,
+                    None,
+                    progress,
+                    multipart,
+                ),
+                FileAction::Download { key, dest, bucket } => (
+                    "download",
+                    Some(dest),
+                    Some(key),
+                    bucket,
+                    None,
+                    false,
+                    false,
+                ),
+                FileAction::Delete { key, bucket } => {
+                    ("delete", None, Some(key), bucket, None, false, false)
+                }
+                FileAction::Ls { prefix, bucket } => {
+                    ("ls", None, None, bucket, prefix, false, false)
+                }
             };
-            handlers::handle_files(action_str, file.as_deref(), key.as_deref(), bucket.as_deref(), prefix.as_deref(), progress, multipart).await
+            handlers::handle_files(
+                action_str,
+                file.as_deref(),
+                key.as_deref(),
+                bucket.as_deref(),
+                prefix.as_deref(),
+                progress,
+                multipart,
+            )
+            .await
         }
         Commands::Urls { action } => {
             let (action_str, key, method, expires, content_type_string, output) = match action {
-                UrlAction::Generate { key, method, expires, content_type, output } => ("generate", Some(key), method, expires, content_type, output),
+                UrlAction::Generate {
+                    key,
+                    method,
+                    expires,
+                    content_type,
+                    output,
+                } => ("generate", Some(key), method, expires, content_type, output),
             };
             let content_type_ref = content_type_string.as_deref();
-            handlers::handle_urls(action_str, key.as_deref(), &method, expires, content_type_ref, &output).await
+            handlers::handle_urls(
+                action_str,
+                key.as_deref(),
+                &method,
+                expires,
+                content_type_ref,
+                &output,
+            )
+            .await
         }
         Commands::Completion { shell } => {
             handlers::handle_completion(&shell, &mut Cli::command()).await
@@ -334,7 +383,11 @@ async fn main() -> Result<()> {
         Commands::Cors { action } => {
             let (action_str, bucket, file, interactive) = match action {
                 CorsAction::Get { name } => ("get", name, None, false),
-                CorsAction::Set { bucket, file, interactive } => ("set", bucket, file, interactive),
+                CorsAction::Set {
+                    bucket,
+                    file,
+                    interactive,
+                } => ("set", bucket, file, interactive),
                 CorsAction::Delete { bucket } => ("delete", bucket, None, false),
             };
             handlers::handle_cors(action_str, bucket.as_deref(), file.as_deref(), interactive).await
@@ -342,18 +395,33 @@ async fn main() -> Result<()> {
         Commands::Lifecycle { action } => {
             let (action_str, bucket, file, interactive) = match action {
                 LifecycleAction::Get { name } => ("get", name, None, false),
-                LifecycleAction::Set { bucket, file, interactive } => ("set", bucket, file, interactive),
+                LifecycleAction::Set {
+                    bucket,
+                    file,
+                    interactive,
+                } => ("set", bucket, file, interactive),
                 LifecycleAction::Delete { bucket } => ("delete", bucket, None, false),
             };
-            handlers::handle_lifecycle(action_str, bucket.as_deref(), file.as_deref(), interactive).await
+            handlers::handle_lifecycle(action_str, bucket.as_deref(), file.as_deref(), interactive)
+                .await
         }
         Commands::Website { action } => {
             let (action_str, bucket, index, error) = match action {
-                WebsiteAction::Enable { bucket, index, error } => ("enable", bucket, index, error),
+                WebsiteAction::Enable {
+                    bucket,
+                    index,
+                    error,
+                } => ("enable", bucket, index, error),
                 WebsiteAction::Disable { bucket } => ("disable", bucket, None, None),
                 WebsiteAction::Get { name } => ("get", name, None, None),
             };
-            handlers::handle_website(action_str, bucket.as_deref(), index.as_deref(), error.as_deref()).await
+            handlers::handle_website(
+                action_str,
+                bucket.as_deref(),
+                index.as_deref(),
+                error.as_deref(),
+            )
+            .await
         }
     }
 }
